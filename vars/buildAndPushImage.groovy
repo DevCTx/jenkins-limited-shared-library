@@ -13,13 +13,13 @@ def call() {
 
 	    echo "docker build image ..."
         sh '''
-            docker build -t "IMAGE_NAME:VERSION" .
+            docker build -t "$IMAGE_NAME:$VERSION" .
         '''
         
 	    echo "docker login and push image ..."
         sh '''
             echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-            docker push "IMAGE_NAME:VERSION"
+            docker push "$IMAGE_NAME:$VERSION"
         '''
     }
 }
