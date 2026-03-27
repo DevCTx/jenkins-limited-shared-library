@@ -12,12 +12,14 @@ def call() {
         sh "whoami && id && docker --version && docker ps"
 
 	    echo "docker build image ..."
-        sh "docker build -t ${params.IMAGE_NAME}:${params.VERSION} ."
+        sh '''
+            docker build -t "IMAGE_NAME:VERSION" .
+        ''''
         
 	    echo "docker login and push image ..."
         sh '''
             echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-            docker push ${params.IMAGE_NAME}:${params.VERSION}
+            docker push "IMAGE_NAME:VERSION"
         '''
     }
 }
