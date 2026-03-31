@@ -2,6 +2,7 @@
 
 def call(String imageName, String version) {
     echo "docker build and push image ..."
+    def img_ver = "${imageName}:${version}"
     withCredentials( [
         usernamePassword( credentialsId: 'dockerhub-credentials',
                         usernameVariable: 'DOCKER_USERNAME',
@@ -12,7 +13,7 @@ def call(String imageName, String version) {
         sh "whoami && id && docker --version && docker ps"
 
         // --rm automatically removes intermediate containers
-        withEnv(["IMG_VER=${imageName}:${version}"]) {
+        withEnv(["IMG_VER=${img_ver}"]) {
             sh '''
                 docker build --rm -t "$IMG_VER" .
                 echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
