@@ -12,11 +12,13 @@ def call(String imageName, String version) {
         sh "whoami && id && docker --version && docker ps"
 
         // --rm automatically removes intermediate containers
-        sh """
-            docker build --rm -t '${imageName}:${version}' . 
-            echo "\$DOCKER_PASSWORD" | docker login -u "\$DOCKER_USERNAME" --password-stdin
-            docker push '${imageName}:${version}'
-            docker logout
-        """
+        withEnv(["IMG_VER=${imageName}:${version}"]) {
+            sh '''
+                docker build --rm -t "$IMG" .
+                echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+                docker push "$IMG_VER"
+                docker logout
+            '''
+        }
     }
 }
