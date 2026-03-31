@@ -14,7 +14,7 @@ def call(String imageName, String version) {
         // --rm automatically removes intermediate containers
         sh """
             docker build --rm -t '${imageName}:${version}' . 
-            echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+            echo "\$DOCKER_PASSWORD" | docker login -u "\$DOCKER_USERNAME" --password-stdin
             docker push '${imageName}:${version}'
             docker logout
         """
