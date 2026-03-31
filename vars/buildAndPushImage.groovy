@@ -11,9 +11,9 @@ def call() {
         echo "check docker env"
         sh "whoami && id && docker --version && docker ps"
 
-	    echo "docker build image ..."
+	    echo "docker build image ..."       // --rm automatically removes intermediate containers
         sh '''
-            docker build -t "$IMAGE_NAME:$VERSION" . 
+            docker build --rm -t "$IMAGE_NAME:$VERSION" . 
         '''
         
 	    echo "docker login and push image ..."
