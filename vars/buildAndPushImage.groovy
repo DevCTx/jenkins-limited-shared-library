@@ -20,6 +20,7 @@ def call() {
         sh '''
             echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
             docker push "$IMAGE_NAME:$VERSION"
+            docker logout
         '''
     }
 }
