@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 
-def call() {
+def call(String imageName, String version) {
     echo "withCredentials"
     withCredentials( [
         usernamePassword( credentialsId: 'dockerhub-credentials',
@@ -13,13 +13,13 @@ def call() {
 
 	    echo "docker build image ..."       // --rm automatically removes intermediate containers
         sh '''
-            docker build --rm -t "$IMAGE_NAME:$VERSION" . 
+            docker build --rm -t '${imageName}:${version}' . 
         '''
         
 	    echo "docker login and push image ..."
         sh '''
             echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-            docker push "$IMAGE_NAME:$VERSION"
+            docker push '${imageName}:${version}'
             docker logout
         '''
     }
