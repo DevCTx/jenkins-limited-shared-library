@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 
-def dockerhubCleanImageExceptTag(String imageName, String imageTag) {
+def call(String imageName, String imageTag) {
     echo "Cleaning all ${imageName} docker images except tag ${imageTag} on Docker Hub..."
 
     withCredentials([usernamePassword(
