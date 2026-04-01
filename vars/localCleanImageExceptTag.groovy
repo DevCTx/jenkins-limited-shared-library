@@ -8,7 +8,7 @@ def call(String imageName, String imageTag) {
 
     // // List all tags and ids of the given image, except for the specified tag, and remove all others from those listed ids.
     sh """
-        docker images "${imageName}" --format "{{.Tag}} {{.ID}}" | grep -v "${imageTag}" | awk '{print \$2}' | xargs -r docker rmi -f '
+        docker images "${imageName}" --format "{{.Tag}} {{.ID}}" | grep -v "${imageTag}" | awk '{print \$2}' | xargs -r docker rmi -f
     """
 }
 
