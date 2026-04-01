@@ -1,4 +1,7 @@
 #!/usr/bin/env groovy
+//
+// buildAndPushImage.groovy
+//
 
 def call(String imageName, String imageTag) {
     echo "docker build and push image ..."

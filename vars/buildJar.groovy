@@ -1,4 +1,7 @@
 #!/usr/bin/env groovy
+//
+// buildJar.groovy
+//
 
 def call() {
     echo "Building JAR file ..."

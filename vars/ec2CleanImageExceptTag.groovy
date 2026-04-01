@@ -1,4 +1,7 @@
 #!/usr/bin/env groovy
+//
+// ec2CleanImageExceptTag.groovy
+//
 
 def call(String imageName, String imageTag) {
     echo "Cleaning all ${imageName} docker images except tag ${imageTag} on EC2..."
