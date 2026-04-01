@@ -5,7 +5,7 @@ def call(String imageName, String imageTag) {
 
     def dockerCmd = """
         docker image prune -f
-        docker images "${imageName}" --format "{{.Tag}} {{.ID}}" | grep -v "${imageTag}" | awk '{print $2}' | xargs -r docker rmi -f
+        docker images "${imageName}" --format "{{.Tag}} {{.ID}}" | grep -v "${imageTag}" | awk '{print \$2}' | xargs -r docker rmi -f
     """
 
     withEnv(["DOCKER_CMD=${dockerCmd}"]) {
