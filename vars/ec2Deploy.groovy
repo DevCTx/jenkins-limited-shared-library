@@ -1,7 +1,7 @@
 #!/usr/bin/env groovy
 
 def call(String containerName, String hostPort, String containerPort, String imageName, String imageTag) {
-    echo "Deploying the application..."
+    echo "Deploying the application... "
 
     def dockerCmd = """
         docker pull ${imageName}:${imageTag} &&
