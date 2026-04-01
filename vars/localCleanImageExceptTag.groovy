@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 
-def localCleanImageExceptTag(String imageName, String imageTag) {
+def call(String imageName, String imageTag) {
     echo "Cleaning all ${imageName} docker images except tag ${imageTag} on local..."
 
     // clean the images with no tag or <none>

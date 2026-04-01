@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 
-def buildAndPushImage(String imageName, String imageTag) {
+def call(String imageName, String imageTag) {
     echo "docker build and push image ..."
 
     withEnv(["IMG_TAG=${imageName}:${imageTag}"]) {

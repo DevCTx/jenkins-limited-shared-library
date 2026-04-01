@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 
-def ec2Deploy(String containerName, String hostPort, String containerPort, String imageName, String imageTag) {
+def call(String containerName, String hostPort, String containerPort, String imageName, String imageTag) {
     echo "Deploying the application... "
 
     def dockerCmd = """
