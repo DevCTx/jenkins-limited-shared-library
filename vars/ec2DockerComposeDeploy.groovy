@@ -12,7 +12,6 @@ def call(String containerName, String hostPort, String containerPort, String ima
         export CONTAINER_PORT=${containerPort}
         export IMAGE_NAME=${imageName}
         export IMAGE_TAG=${imageTag}
-
         docker-compose -f docker-compose.yaml down --remove-orphans --volumes
         docker-compose -f docker-compose.yaml up -d --quiet-pull
     """
