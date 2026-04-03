@@ -7,7 +7,11 @@ def call(String containerName, String hostPort, String containerPort, String ima
     echo "Deploying the application via Docker Compose on EC2 ... "
 
     def dockerCmd = """
-        export IMAGE_TAG=${imageName}:${imageTag}
+        export CONTAINER=${containerName}
+        export HOST_PORT=${hostPort}
+        export CONTAINER_PORT=${containerPort}
+        export IMAGE_NAME=${imageName}
+        export IMAGE_TAG=${imageTag}
         docker-compose -f docker-compose.yaml up
     """
 
