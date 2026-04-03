@@ -6,10 +6,10 @@
 def call(String containerName, String hostPort, String containerPort, String imageName, String imageTag) {
     echo "Deploying the application via Docker Compose on EC2 ... "
 
-    def imageTag = "${imageName}:${imageTag}"
+    def imageNameTag = "${imageName}:${imageTag}"
     def dockerCmd = "docker compose -f docker-compose.yaml up"
 
-    withEnv(["IMAGE_TAG=${imageTag}", "DOCKER_CMD=${dockerCmd}"]) {
+    withEnv(["IMAGE_TAG=${imageNameTag}", "DOCKER_CMD=${dockerCmd}"]) {
         sshagent(['ec2-server-key']) {
             withCredentials([
                 string(credentialsId: 'EC2_USER', variable: 'EC2_USER'),
