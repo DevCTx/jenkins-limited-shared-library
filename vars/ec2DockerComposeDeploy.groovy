@@ -9,7 +9,7 @@ def call(String containerName, String hostPort, String containerPort, String ima
     def dockerCmd = """
         export IMAGE_TAG=${imageName}:${imageTag}
         docker-compose -f docker-compose.yaml up
-    """"
+    """
 
     withEnv(["DOCKER_CMD=${dockerCmd}"]) {
         sshagent(['ec2-server-key']) {
