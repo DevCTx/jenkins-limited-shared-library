@@ -26,6 +26,7 @@ def call() {
         aws ssm send-command \
           --document-name "AWS-RunShellScript" \
           --instance-ids $PROD_EC2_ID \
+          --region eu-west-3 \
           --comment "Docker Compose with Env deployment" \
           --parameters commands='[
             "sudo mkdir -p /opt/app",
