@@ -31,8 +31,13 @@ def call() {
             "sudo mkdir -p /opt/app",
             "sudo chown -R ec2-user:docker /opt/app || true",
 
-            "echo ${env} | base64 -d > /opt/app/.env",
-            "echo ${compose} | base64 -d > /opt/app/docker-compose.yaml",
+            "cat <<EOF | base64 -d > /opt/app/.env
+            ${env}
+            EOF",
+
+            "cat <<EOF | base64 -d > /opt/app/docker-compose.yaml
+            ${compose}
+            EOF",
 
             "cd /opt/app",
             "docker compose down --remove-orphans",
