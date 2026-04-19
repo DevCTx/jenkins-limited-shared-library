@@ -15,7 +15,7 @@ def call(String containerName, String hostPort, String containerPort, String ima
 
     withEnv(["DOCKER_CMD=${dockerCmd}"]) {
         sshagent(['EC2_SSH_KEY']) {
-            withCredentials([),
+            withCredentials([
                 string(credentialsId: 'MY_INSTANCE_EC2_IP', variable: 'MY_INSTANCE_EC2_IP')
             ]) {
                 sh 'ssh -o StrictHostKeyChecking=no ec2-user@$MY_INSTANCE_EC2_IP "$DOCKER_CMD"'

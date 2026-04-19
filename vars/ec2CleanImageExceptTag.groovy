@@ -12,12 +12,11 @@ def call(String imageName, String imageTag) {
     """
 
     withEnv(["DOCKER_CMD=${dockerCmd}"]) {
-        sshagent(['ec2-server-key']) {
+        sshagent(['EC2_SSH_KEY']) {
             withCredentials([
-                string(credentialsId: 'EC2_USER', variable: 'EC2_USER'),
                 string(credentialsId: 'EC2_HOST', variable: 'EC2_HOST')
             ]) {
-                sh 'ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "$DOCKER_CMD"'
+                sh 'ssh -o StrictHostKeyChecking=no ec2-user@$EC2_HOST "$DOCKER_CMD"'
             }
         }
     }
