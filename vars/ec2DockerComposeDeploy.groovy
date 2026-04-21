@@ -2,7 +2,6 @@
 //
 // ec2DockerComposeDeploy.groovy
 //
-
 def call(String containerName, String hostPort, String containerPort, String imageName, String imageTag) {
     echo "Deploying the application via Docker Compose on EC2 ... "
 

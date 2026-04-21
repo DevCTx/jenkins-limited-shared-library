@@ -12,12 +12,6 @@ def call(String imageName, String imageTag) {
     )]) {
         withEnv(["IMAGE_NAME=${imageName}", "IMAGE_TAG=${imageTag}"]) {
             sh '''
-                # Retrieve the Json Web Token (JWT)
-                # TOKEN=$(curl -s -X POST "https://hub.docker.com/v2/users/login" \
-                #    -H "Content-Type: application/json" \
-                #    -d '{"username": "'"$DOCKER_USERNAME"'", "password": "'"$DOCKER_PASSWORD'"}' \
-                #    | grep -o '"token":"[^"]*' | cut -d'"' -f4)
-
                 # List all tags except the given tag and delete the others
                 curl -s "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags?page_size=100" \
                     | grep -o '"name":"[^"]*' | cut -d'"' -f4 \
@@ -26,7 +20,6 @@ def call(String imageName, String imageTag) {
                         echo "Deleting tag: $tag"
                         curl -s -X DELETE "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$tag/" \
                              -H "Authorization: Bearer $DOCKER_PASSWORD"
-                 #           -H "Authorization: Bearer $TOKEN"
                     done
             '''
         }
