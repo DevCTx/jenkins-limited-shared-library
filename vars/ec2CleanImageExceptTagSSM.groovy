@@ -18,6 +18,6 @@ def call(String imageName, String imageTag) {
                 "docker image prune -f",
                 "docker images ${imageName} --format \\"{{.Tag}} {{.ID}}\\" | grep -v ${imageTag} | awk \\"{print \\$2}\\" | xargs -r docker rmi -f"
                 ]'
-        """ // SSM cmd can not be on multilines
+        """ // SSM cmd can not be on multilines 
     }
 }
