@@ -21,7 +21,8 @@ def call() {
               --region eu-west-3 \
               --comment "Docker Compose with Env deployment" \
               --parameters commands='[
-                    "export BUCKET=${BUCKET}",
+
+                    "export BUCKET='"$BUCKET"' ",
 
                     "sudo mkdir -p /opt/app",
                     "sudo chown -R ec2-user:docker /opt/app || true",
