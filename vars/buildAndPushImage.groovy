@@ -20,7 +20,7 @@ def call(String imageName, String imageTag) {
             sh '''
                 docker build --rm -t "$IMG_TAG" .
                 echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-                docker push "$IMG_TAG"
+                docker push "$IMG_TAG" --quiet
                 docker logout
             '''
         }
