@@ -8,7 +8,6 @@ def call(String imageName, String imageTag) {
     withCredentials([
         string(credentialsId: 'PROD_EC2_ID', variable: 'PROD_EC2_ID')
     ]) {
-
         sh """
             aws ssm send-command \
               --document-name "AWS-RunShellScript" \
