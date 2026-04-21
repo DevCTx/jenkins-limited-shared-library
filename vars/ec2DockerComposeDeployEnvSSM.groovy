@@ -10,38 +10,32 @@ def call() {
         string(credentialsId: 'PROD_EC2_ID', variable: 'PROD_EC2_ID')
     ]) {
 
-        // Encode the local files in base64 to facilitate the transfert 
-        // but only with shell or it will be blocked with groovy policies
-        def env = sh(
-            script: "base64 -w 0 .env",
-            returnStdout: true
-        ).trim()
-
-        def compose = sh(
-            script: "base64 -w 0 docker-compose.yaml",
-            returnStdout: true
-        ).trim()
+        def bucket = "bucket/app/${env.BUILD_NUMBER}"
 
         sh """
+        set -e
+
+        aws s3 cp docker-compose.yaml s3://${bucket}/
+        aws s3 cp .env s3://${bucket}/
+
         aws ssm send-command \
           --document-name "AWS-RunShellScript" \
-          --instance-ids $PROD_EC2_ID \
+          --instance-ids ${PROD_EC2_ID} \
           --region eu-west-3 \
           --comment "Docker Compose with Env deployment" \
           --parameters commands='[
+            "set -e",
+
+            "export BUCKET=${bucket}",
+
             "sudo mkdir -p /opt/app",
             "sudo chown -R ec2-user:docker /opt/app || true",
 
-            "cat <<EOF | base64 -d > /opt/app/.env
-            ${env}
-            EOF",
-
-            "cat <<EOF | base64 -d > /opt/app/docker-compose.yaml
-            ${compose}
-            EOF",
+            "aws s3 cp s3://\\$BUCKET/.env /opt/app/.env",
+            "aws s3 cp s3://\\$BUCKET/docker-compose.yaml /opt/app/docker-compose.yaml",
 
             "cd /opt/app",
-            "docker compose down --remove-orphans",
+            "docker compose down --remove-orphans || true",
             "docker compose up -d --quiet-pull"
           ]'
         """
