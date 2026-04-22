@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 //
-// ec2Deploy.groovy
+// ec2DeployDockerCmdSSH.groovy
 //
 def call(String containerName, String hostPort, String containerPort, String imageName, String imageTag) {
     echo "Deploying the application... "

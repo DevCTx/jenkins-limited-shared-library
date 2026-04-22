@@ -1,10 +1,20 @@
 #!/usr/bin/env groovy
 //
-// ec2DockerComposeDeployEnvSSM.groovy
+// ec2DeployEnvDockerComposeSSM.groovy
 //
 def call() {
 
     echo "Deploying application via AWS SSM..."
+
+    ///////////////////////////////////////////////////////////////////////
+    //
+    //  SSM is really valuable when Jenkins is running on AWS with an IAM 
+    //  role, and on not a server outside of AWS, because it will ask for 
+    //  credentials to connect and some ports to open!
+    //
+    //  Requires creating Jenkins server on AWS to use SSM properly !!!
+    //
+    ///////////////////////////////////////////////////////////////////////
 
     // Encode the local files in base64 to facilitate the transfert 
     // but only with shell or it will be blocked with groovy policies
@@ -26,12 +36,16 @@ def call() {
             string(credentialsId: 'PROD_EC2_ID', variable: 'PROD_EC2_ID')
         ]) {
             sh '''
+            sh 'aws sts get-caller-identity'
+
+            set +x   # disables the display of commands
+
             aws ssm send-command \
               --document-name "AWS-RunShellScript" \
               --instance-ids $PROD_EC2_ID \
               --region eu-west-3 \
               --comment "Docker Compose with Env deployment" \
-              --parameters commands='[
+              --parameters commands='[    
                     "sudo mkdir -p /opt/app",
                     "sudo chown -R ec2-user:docker /opt/app || true",
 
