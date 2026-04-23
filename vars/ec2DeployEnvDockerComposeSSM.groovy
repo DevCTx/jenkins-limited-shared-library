@@ -36,9 +36,7 @@ def call() {
             string(credentialsId: 'PROD_EC2_ID', variable: 'PROD_EC2_ID')
         ]) {
             sh '''
-            sh 'aws sts get-caller-identity'
-
-            set +x   # disables the display of commands
+            aws sts get-caller-identity
 
             aws ssm send-command \
               --document-name "AWS-RunShellScript" \
@@ -59,6 +57,8 @@ def call() {
             // cd /opt/app alone is useless in SSM
             // Each command in the SSM table runs in an independent shell 
             // so the cd does not persist for the next command.
+            //
+            // set +x   # disables the display of commands
         }
     }
 }
