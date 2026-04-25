@@ -16,7 +16,7 @@ def call(String imageName, String imageTag) {
               --comment "Docker Compose with Env deployment" \
               --parameters '{
                     "commands":["docker image prune -f",
-                    "docker images ${imageName} --format \\"{{.Tag}} {{.ID}}\\" | grep -v ${imageTag} | awk \\"{print \\$2}\\" | xargs -r docker rmi -f"]}'
+                    "docker images ${imageName} --format \\"{{.Tag}} {{.ID}}\\" | grep -v ${imageTag} | awk \\"{print \$2}\\" | xargs -r docker rmi -f"]}'
         """
     }
 }
