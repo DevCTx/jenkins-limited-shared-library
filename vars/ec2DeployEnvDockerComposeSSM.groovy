@@ -52,8 +52,8 @@ def call() {
                             "sudo chown -R ec2-user:docker /opt/app || true",
                             "echo '"$DOT_ENV"' | base64 -d > /opt/app/.env",
                             "echo '"$DOCKER_COMPOSE"' | base64 -d > /opt/app/docker-compose.yaml",
-                            "docker compose --project-directory /opt/app down --remove-orphans || true",
-                            "docker compose --project-directory /opt/app up -d --quiet-pull"
+                            "bash -c 'set -a && source /opt/app/.env && set +a && docker compose --project-directory /opt/app down --remove-orphans || true",
+                            "bash -c 'set -a && source /opt/app/.env && set +a && docker compose --project-directory /opt/app up -d --quiet-pull"
                         ]' \
                       --query 'Command.CommandId' \
                       --output text
