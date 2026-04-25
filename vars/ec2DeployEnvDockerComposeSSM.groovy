@@ -38,6 +38,8 @@ def call() {
             sh '''
             aws sts get-caller-identity
 
+            set +x   # disables the display of commands
+            
             aws ssm send-command \
               --document-name "AWS-RunShellScript" \
               --instance-ids $PROD_EC2_ID \
@@ -53,6 +55,8 @@ def call() {
                     "cd /opt/app && docker compose down --remove-orphans || true",
                     "cd /opt/app && docker compose up -d --quiet-pull" 
                 ]'
+
+            set -x   # enable the display of commands
             ''' 
             // cd /opt/app alone is useless in SSM
             // Each command in the SSM table runs in an independent shell 
