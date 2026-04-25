@@ -41,19 +41,20 @@ def call() {
 
             def commandId = sh(
                 script: '''
-                    set +x
+                    # set +x
                     aws ssm send-command \
                       --document-name "AWS-RunShellScript" \
                       --instance-ids $PROD_EC2_ID \
                       --region eu-west-3 \
                       --comment "Docker Compose with Env deployment" \
-                      --parameters commands='[
+                      --parameters commands='[    
                             "sudo mkdir -p /opt/app",
                             "sudo chown -R ec2-user:docker /opt/app || true",
                             "echo '"$DOT_ENV"' | base64 -d > /opt/app/.env",
                             "echo '"$DOCKER_COMPOSE"' | base64 -d > /opt/app/docker-compose.yaml",
-                            "bash -c 'set -a && source /opt/app/.env && set +a && docker compose --project-directory /opt/app down --remove-orphans || true",
-                            "bash -c 'set -a && source /opt/app/.env && set +a && docker compose --project-directory /opt/app up -d --quiet-pull"
+                            "cat /opt/app/.env",
+                            "docker compose --project-directory /opt/app --env-file /opt/app/.env down || true",
+                            "docker compose --project-directory /opt/app --env-file /opt/app/.env up -d"
                         ]' \
                       --query 'Command.CommandId' \
                       --output text
@@ -65,6 +66,8 @@ def call() {
             // Each command in the SSM table runs in an independent shell 
             // so the cd does not persist for the next command.
             // use --project-directory /opt/app instead
+            //
+            // and --env-file /opt/app/.env to define the env
             //
             // set +x   # disables the display of commands
 
