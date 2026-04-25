@@ -71,29 +71,14 @@ def call() {
             echo "SSM Command ID: ${commandId}"
 
             // Wait for the execution (pull image) to finish
-            sh """
-                aws ssm wait command-executed \
-                  --command-id ${commandId} \
-                  --instance-id \$PROD_EC2_ID \
-                  --region eu-west-3
-            """
-            
-            // Check the status
-            def status = sh(
-                script: """
-                    aws ssm get-command-invocation \
+            try {
+                sh """
+                    aws ssm wait command-executed \
                       --command-id ${commandId} \
                       --instance-id \$PROD_EC2_ID \
-                      --region eu-west-3 \
-                      --query 'Status' \
-                      --output text
-                """,
-                returnStdout: true
-            ).trim()
-
-            echo "SSM Command Status: ${status}"
-
-            if (status != 'Success') {
+                      --region eu-west-3
+                """
+            } catch (e) {
                 // Display logs in case of failure
                 sh """
                     aws ssm get-command-invocation \
@@ -104,6 +89,16 @@ def call() {
                       --output text
                 """
                 error("SSM deployment failed with status: ${status}")
+            } finally {
+                // Always print stdout + stderr
+                sh """
+                    aws ssm get-command-invocation \
+                      --command-id ${commandId} \
+                      --instance-id \$PROD_EC2_ID \
+                      --region eu-west-3 \
+                      --query '{Status: Status, StdOut: StandardOutputContent, StdErr: StandardErrorContent}' \
+                      --output json
+                """
             }
         }
     }
