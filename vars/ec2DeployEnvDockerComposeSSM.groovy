@@ -19,7 +19,7 @@ def call() {
     // Encode the local files in base64 to facilitate the transfert 
     // but only with shell or it will be blocked with groovy policies
     def dot_env = sh(        
-        script: "cat .env && base64 -w 0 .env",
+        script: "base64 -w 0 .env",
         returnStdout: true
     ).trim()
 
