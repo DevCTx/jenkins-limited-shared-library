@@ -52,8 +52,8 @@ def call() {
                             "sudo chown -R ec2-user:docker /opt/app || true",
                             "echo '"$DOT_ENV"' | base64 -d > /opt/app/.env",
                             "echo '"$DOCKER_COMPOSE"' | base64 -d > /opt/app/docker-compose.yaml",
-                            "cd /opt/app && docker compose down --remove-orphans || true",
-                            "cd /opt/app && docker compose up -d --quiet-pull"
+                            "docker compose --project-directory /opt/app down --remove-orphans || true",
+                            "docker compose --project-directory /opt/app up -d --quiet-pull"
                         ]' \
                       --query 'Command.CommandId' \
                       --output text
@@ -64,6 +64,7 @@ def call() {
             // cd /opt/app alone is useless in SSM
             // Each command in the SSM table runs in an independent shell 
             // so the cd does not persist for the next command.
+            // use --project-directory /opt/app instead
             //
             // set +x   # disables the display of commands
 
