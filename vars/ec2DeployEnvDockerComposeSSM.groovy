@@ -60,7 +60,7 @@ def call() {
                 ''',
                 returnStdout: true
             ).trim()
-            // Notes :
+            // Notes : 
             // cd /opt/app alone is useless in SSM
             // Each command in the SSM table runs in an independent shell 
             // so the cd does not persist for the next command.
