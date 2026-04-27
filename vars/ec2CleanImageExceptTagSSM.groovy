@@ -3,7 +3,7 @@
 // ec2CleanImageExceptTagSSM.groovy
 //
 def call(String imageName, String imageTag) {
-    echo "Cleaning all ${imageName} docker images except tag ${imageTag} on EC2 via AWS SSM..."
+    echo "Cleaning EC2 images of ${imageName} except tag ${imageTag} via AWS SSM..."
 
     withCredentials([
         string(credentialsId: 'PROD_EC2_ID', variable: 'PROD_EC2_ID')
