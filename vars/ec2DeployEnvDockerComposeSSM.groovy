@@ -57,7 +57,7 @@ EOF
                       "sudo chown -R ec2-user:docker /opt/app || true",
                       "echo $docker_compose | base64 -d > /opt/app/docker-compose.yaml",
                       "aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
-                      "docker compose --project-directory /opt/app down || true",
+                      "docker compose --project-directory /opt/app --remove-orphans down || true",
                       "docker compose --project-directory /opt/app up -d"
                   ]' \
                 --query 'Command.CommandId' \
