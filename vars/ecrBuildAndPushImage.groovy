@@ -9,7 +9,7 @@ def call() {
         string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY')
     ]) {
         echo "Build of ${ECR_REGISTRY}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG}"
-        sh "docker build --rm -t ${ECR_REGITRY}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG} ."
+        sh "docker build --rm -t ${ECR_REGISTRY}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG} ."
 
         echo "Push of ${ECR_REGISTRY}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG}"
         sh """

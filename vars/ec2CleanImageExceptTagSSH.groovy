@@ -2,12 +2,13 @@
 //
 // ec2CleanImageExceptTagSSH.groovy
 //
-def call(String imageName, String imageTag) {
-    echo "Cleaning all ${imageName} docker images except tag ${imageTag} on EC2..."
+def call() {
+    echo "Cleaning all ${APP_IMAGE_NAME} docker images except tag ${APP_IMAGE_TAG} on EC2..."
 
     def dockerCmd = """
         docker image prune -f
-        docker images "${imageName}" --format "{{.Tag}} {{.ID}}" | grep -v "${imageTag}" | awk '{print \$2}' | xargs -r docker rmi -f
+        docker images "${APP_IMAGE_NAME}" --format "{{.Tag}} {{.ID}}" \
+        | grep -v "${APP_IMAGE_TAGE}" | awk '{print \$2}' | xargs -r docker rmi -f
     """
 
     withEnv(["DOCKER_CMD=${dockerCmd}"]) {

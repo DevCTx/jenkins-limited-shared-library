@@ -2,24 +2,33 @@
 //
 // ec2DeployDockerCmdSSH.groovy
 //
-def call(String containerName, String hostPort, String containerPort, String repoName, String imageName, String imageTag) {
+def call() {
     echo "Deploying the application... "
 
-    withEnv(["IMG_TAG=${repoName}/${imageName}:${imageTag}"]) {
-        def dockerCmd = """
-            # docker pull ${imageName}:${imageTag} &&
-            docker pull ${IMG_TAG} &&
-            docker stop ${containerName} || true &&
-            docker rm ${containerName} || true &&
-            docker run -d --name ${containerName} -p ${hostPort}:${containerPort} ${IMG_TAG}
-        """
+    withCredentials( [
+        string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
+    ]) {
+        withEnv(["IMG_TAG=${DOCKER_USERNAME}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG}"]) 
+        {
+            echo "Deploy ${IMG_TAG}"
 
-        withEnv(["DOCKER_CMD=${dockerCmd}"]) {
-            sshagent(['EC2_SSH_KEY']) {
-                withCredentials([
-                    string(credentialsId: 'MY_INSTANCE_EC2_IP', variable: 'MY_INSTANCE_EC2_IP')
-                ]) {
-                    sh 'ssh -o StrictHostKeyChecking=no ec2-user@$MY_INSTANCE_EC2_IP "$DOCKER_CMD"'
+            def dockerCmd = """
+                docker pull ${IMG_TAG} &&
+                docker stop ${APP_CONTAINER_NAME} || true &&
+                docker rm ${APP_CONTAINER_NAME} || true &&
+                docker run -d \
+                    --name ${APP_CONTAINER_NAME} \
+                    -p ${APP_HOST_PORT}:${APP_CONTAINER_PORT} \
+                    ${IMG_TAG}
+            """
+
+            withEnv(["DOCKER_CMD=${dockerCmd}"]) {
+                sshagent(['EC2_SSH_KEY']) {
+                    withCredentials([
+                        string(credentialsId: 'MY_INSTANCE_EC2_IP', variable: 'MY_INSTANCE_EC2_IP')
+                    ]) {
+                        sh 'ssh -o StrictHostKeyChecking=no ec2-user@$MY_INSTANCE_EC2_IP "$DOCKER_CMD"'
+                    }
                 }
             }
         }
