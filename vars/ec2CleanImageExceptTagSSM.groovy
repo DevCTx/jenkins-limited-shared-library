@@ -9,27 +9,29 @@ def call() {
         string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY'),
         string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID')
     ]) {
-        echo "...of ${ECR_REGISTRY}/${APP_IMAGE_NAME} except tag ${APP_IMAGE_TAG} "
+        echo "...of ${APP_IMAGE_NAME} except tag ${APP_IMAGE_TAG} "
 
-        sh """
-            aws ssm send-command \
-                --region eu-west-3 \
-                --instance-ids $EC2_PROD_ID \
-                --document-name "AWS-RunShellScript" \
-                --comment "Cleaning EC2 images via AWS SSM" \
-                --parameters commands='[
-                    "docker image prune -f",
-                    "docker images ${ECR_REGISTRY}/${APP_IMAGE_NAME} --format '{{.Tag}} {{.ID}}' | grep -v '${APP_IMAGE_TAG}' | awk '{print \$2}' | xargs -r docker rmi -f"
-                ]' \
-                --query 'Command.CommandId' \
-                --output text > /tmp/ssm_deploy_cmd_id.txt  
+        sh '''
+            CMD_ID=\$(\
+                aws ssm send-command \
+                    --region eu-west-3 \
+                    --instance-ids $EC2_PROD_ID \
+                    --document-name "AWS-RunShellScript" \
+                    --comment "Cleaning EC2 images via AWS SSM" \
+                    --parameters commands='[
+                        "docker image prune -f",
+                        "docker images ${ECR_REGISTRY}/${APP_IMAGE_NAME} --format \"{{.Tag}} {{.ID}}\" | grep -v ${APP_IMAGE_TAG} | awk '{print \\$2}' | xargs -r docker rmi -f"
+                    ]' \
+                    --query 'Command.CommandId' \
+                    --output text
+            )
 
-            CMD_ID=\$(cat /tmp/ssm_deploy_cmd_id.txt)
+            echo "SSM Command ID: \$CMD_ID"
 
             aws ssm wait command-executed \
                 --region eu-west-3 \
                 --instance-id $EC2_PROD_ID \
                 --command-id \$CMD_ID
-        """
+        '''
     }
 }
