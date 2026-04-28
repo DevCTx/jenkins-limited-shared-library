@@ -5,14 +5,15 @@
 def call(String imageName, String imageTag) {
     echo "Cleaning Docker Hub images of ${imageName} except tag ${imageTag} ..."
     
-    withEnv([
-        "IMAGE_NAME=${DOCKER_HUB_REPOSITORY}/${imageName}",
-        "IMAGE_TAG=${imageTag}"
+    withCredentials( [
+        string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
+        string(credentialsId: 'dockerhub-pat', variable: 'DOCKER_PAT'),
+        string(credentialsId: 'DOCKER_HUB_REPOSITORY', variable: 'DOCKER_HUB_REPOSITORY')
     ]) {
-        withCredentials([
-            string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
-            string(credentialsId: 'dockerhub-pat', variable: 'DOCKER_PAT')
-        )]) {
+        withEnv([
+            "IMAGE_NAME=${DOCKER_HUB_REPOSITORY}/${imageName}",
+            "IMAGE_TAG=${imageTag}"
+        ]) {
             sh '''
                 # List all tags except the given tag and delete the others
                 curl -s "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags?page_size=100" \

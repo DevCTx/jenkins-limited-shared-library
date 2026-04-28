@@ -18,92 +18,65 @@ def call() {
 
     // Encode the local files in base64 to facilitate the transfert 
     // but only with shell or it will be blocked with groovy policies
-    def dot_env = sh(        
-        script: "base64 -w 0 .env",
-        returnStdout: true
-    ).trim()
+    withCredentials( [
+        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY')
+    ]) {
+        sh """
+        cat > docker-compose.yaml <<'EOF'
+services:
+    ${APP_IMAGE_NAME}:
+        image: ${ECR_REGISTRY}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG}
+        container_name: ${APP_CONTAINER_NAME}
+        restart: unless-stopped
+        ports:
+            - "${APP_HOST_PORT}:${APP_CONTAINER_PORT}"
+    EOF
+    """    
+    }
 
     def docker_compose = sh(
         script: "base64 -w 0 docker-compose.yaml",
         returnStdout: true
     ).trim()
 
-    withEnv([
-        "DOT_ENV=${dot_env}", 
-        "DOCKER_COMPOSE=${docker_compose}"
-    ]) {        
-        withCredentials([
-            string(credentialsId: 'PROD_EC2_ID', variable: 'PROD_EC2_ID')
-        ]) {
+    withCredentials( [
+        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY'),
+        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID')
+    ]) {
+        // Verify IAM role
+        sh 'aws sts get-caller-identity'        
 
-            sh 'aws sts get-caller-identity'
-            
+        sh """
+            aws ssm send-command \
+              --region eu-west-3 \
+              --instance-ids $EC2_PROD_ID \
+              --document-name "AWS-RunShellScript" \
+              --comment "Deploy docker-compose" \
+              --parameters commands='[    
+                    "sudo mkdir -p /opt/app",
+                    "sudo chown -R ec2-user:docker /opt/app || true",
+                    "echo $docker_compose | base64 -d > /opt/app/docker-compose.yaml",
+                    "aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
+                    "docker compose --project-directory /opt/app down || true",
+                    "docker compose --project-directory /opt/app up -d"
+                ]' \
+              --query 'Command.CommandId' > /tmp/ssm_deploy_cmd_id.txt \
+              --output text            
 
-            def commandId = sh(
-                script: '''
-                    # set +x
-                    aws ssm send-command \
-                      --document-name "AWS-RunShellScript" \
-                      --instance-ids $PROD_EC2_ID \
-                      --region eu-west-3 \
-                      --comment "Docker Compose with Env deployment" \
-                      --parameters commands='[    
-                            "sudo mkdir -p /opt/app",
-                            "sudo chown -R ec2-user:docker /opt/app || true",
-                            "echo '"$DOT_ENV"' | base64 -d > /opt/app/.env",
-                            "echo '"$DOCKER_COMPOSE"' | base64 -d > /opt/app/docker-compose.yaml",
-                            "cat /opt/app/.env",
-                            "docker compose --project-directory /opt/app --env-file /opt/app/.env down || true",
-                            "docker compose --project-directory /opt/app --env-file /opt/app/.env up -d"
-                        ]' \
-                      --query 'Command.CommandId' \
-                      --output text
-                ''',
-                returnStdout: true
-            ).trim()
-            // Notes : 
-            // cd /opt/app alone is useless in SSM
-            // Each command in the SSM table runs in an independent shell 
-            // so the cd does not persist for the next command.
-            // use --project-directory /opt/app instead
-            //
-            // and --env-file /opt/app/.env to define the env
-            //
-            // set +x   # disables the display of commands
+            CMD_ID=\$(cat /tmp/ssm_deploy_cmd_id.txt)
 
+            aws ssm wait command-executed \
+                --region eu-west-3        
+                --instance-id ${EC2_PROD_ID} \
+                --command-id "\$CMD_ID" \
+        """
 
-            echo "SSM Command ID: ${commandId}"
-
-            // Wait for the execution (pull image) to finish
-            try {
-                sh """
-                    aws ssm wait command-executed \
-                      --command-id ${commandId} \
-                      --instance-id \$PROD_EC2_ID \
-                      --region eu-west-3
-                """
-            } catch (e) {
-                // Display logs in case of failure
-                sh """
-                    aws ssm get-command-invocation \
-                      --command-id ${commandId} \
-                      --instance-id \$PROD_EC2_ID \
-                      --region eu-west-3 \
-                      --query 'StandardErrorContent' \
-                      --output text
-                """
-                error("SSM deployment failed with status: ${status}")
-            } finally {
-                // Always print stdout + stderr
-                sh """
-                    aws ssm get-command-invocation \
-                      --command-id ${commandId} \
-                      --instance-id \$PROD_EC2_ID \
-                      --region eu-west-3 \
-                      --query '{Status: Status, StdOut: StandardOutputContent, StdErr: StandardErrorContent}' \
-                      --output json
-                """
-            }
-        }
-    }
+        // Notes : 
+        // cd /opt/app alone is useless in SSM
+        // Each command in the SSM table runs in an independent shell 
+        // so the cd does not persist for the next command.
+        // use --project-directory /opt/app instead
+        //
+        // set +x   # disables the display of commands
+   }
 }

@@ -2,26 +2,30 @@
 //
 // ecrBuildAndPushImage.groovy
 //
-def call(String imageName, String imageTag) {
+def call() {
     echo "docker build and push image to ECR  ..."
 
-    withEnv(["IMG_TAG=${ECR_REPOSITORY}/${imageName}:${imageTag}"]) {
-        sh '''
+    withCredentials( [
+        string(credentialsId: 'ECR_REGITRY', variable: 'ECR_REGITRY')
+    ]) {
+        echo "Build of ${ECR_REGITRY}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG}"
+        sh "docker build --rm -t ${ECR_REGITRY}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG} ."
+
+        echo "Push of ${ECR_REGITRY}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG}"
+        sh """
             # Verify IAM role
             aws sts get-caller-identity
 
             # Create ECR repo if not exists
-            REPO_NAME=$(echo "$IMG_TAG" | awk -F'/' '{print $NF}' | cut -d: -f1)
-            aws ecr describe-repositories --repository-names "$REPO_NAME" --region eu-west-3 \
-                || aws ecr create-repository --repository-name "$REPO_NAME" --region eu-west-3
+            aws ecr describe-repositories --repository-names ${ECR_REGITRY}/${APP_IMAGE_NAME} --region eu-west-3 \
+                || aws ecr create-repository --repository-name ${ECR_REGITRY}/${APP_IMAGE_NAME} --region eu-west-3
 
             # Login ECR via IAM role
             aws ecr get-login-password --region eu-west-3 \
-                | docker login --username AWS --password-stdin $ECR_REPOSITORY
+                | docker login --username AWS --password-stdin ${ECR_REGITRY}
 
-            docker build --rm -t "$IMG_TAG" .
-            docker push "$IMG_TAG" --quiet
-            docker logout $ECR_REPOSITORY
-        '''
+            docker push ${ECR_REGITRY}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG} --quiet
+            docker logout $ECR_REPOSITORY/${APP_IMAGE_NAME}
+        """
     }
 }
