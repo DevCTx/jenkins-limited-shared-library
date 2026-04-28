@@ -13,15 +13,26 @@ def call() {
 
         sh """
             aws ssm send-command \
-              --document-name "AWS-RunShellScript" \
-              --instance-ids ${EC2_PROD_ID} \
-              --region eu-west-3 \
-              --comment "Docker Compose with Env deployment" \
-              --parameters '{
-                    "commands":["docker image prune -f",
+                --region eu-west-3 \
+                --instance-ids $EC2_PROD_ID \
+                --document-name "AWS-RunShellScript" \
+                --comment "Cleaning EC2 images via AWS SSM" \
+                --parameters commands='[
+                    "docker image prune -f",
                     "docker images ${ECR_REGISTRY}/${APP_IMAGE_NAME} --format \\"{{.Tag}} {{.ID}}\\" \
-                    | grep -v ${APP_IMAGE_TAG} | awk \\"{print \$2}\\" | xargs -r docker rmi -f"]
+                    | grep -v ${APP_IMAGE_TAG} | awk '{print \$2}' | xargs -r docker rmi -f"
+                ]'
+
                 }'
+                --query 'Command.CommandId' \
+                --output text > /tmp/ssm_deploy_cmd_id.txt  
+
+            CMD_ID=\$(cat /tmp/ssm_deploy_cmd_id.txt)
+
+            aws ssm wait command-executed \
+                --region eu-west-3 \
+                --instance-id $EC2_PROD_ID \
+                --command-id \$CMD_ID
         """
     }
 }
