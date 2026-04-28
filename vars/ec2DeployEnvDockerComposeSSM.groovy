@@ -48,27 +48,27 @@ services:
 
         sh """
             aws ssm send-command \
-              --region eu-west-3 \
-              --instance-ids $EC2_PROD_ID \
-              --document-name "AWS-RunShellScript" \
-              --comment "Deploy docker-compose" \
-              --parameters commands='[    
-                    "sudo mkdir -p /opt/app",
-                    "sudo chown -R ec2-user:docker /opt/app || true",
-                    "echo $docker_compose | base64 -d > /opt/app/docker-compose.yaml",
-                    "aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
-                    "docker compose --project-directory /opt/app down || true",
-                    "docker compose --project-directory /opt/app up -d"
-                ]' \
-              --query 'Command.CommandId' > /tmp/ssm_deploy_cmd_id.txt \
-              --output text            
+                --region eu-west-3 \
+                --instance-ids $EC2_PROD_ID \
+                --document-name "AWS-RunShellScript" \
+                --comment "Deploy docker-compose" \
+                --parameters commands='[    
+                      "sudo mkdir -p /opt/app",
+                      "sudo chown -R ec2-user:docker /opt/app || true",
+                      "echo $docker_compose | base64 -d > /opt/app/docker-compose.yaml",
+                      "aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+                      "docker compose --project-directory /opt/app down || true",
+                      "docker compose --project-directory /opt/app up -d"
+                  ]' \
+                --query 'Command.CommandId' \
+                --output text > /tmp/ssm_deploy_cmd_id.txt         
 
             CMD_ID=\$(cat /tmp/ssm_deploy_cmd_id.txt)
 
             aws ssm wait command-executed \
-                --region eu-west-3        
+                --region eu-west-3 \
                 --instance-id ${EC2_PROD_ID} \
-                --command-id "\$CMD_ID" \
+                --command-id "\$CMD_ID"
         """
 
         // Notes : 

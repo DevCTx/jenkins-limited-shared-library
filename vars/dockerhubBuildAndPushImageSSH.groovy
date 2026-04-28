@@ -4,6 +4,7 @@
 //
 def call() {
     echo "docker build and push image to Docker Hub..."
+    echo "${APP_IMAGE_NAME}:${APP_IMAGE_TAG}"
 
     withCredentials( [
         string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
@@ -23,7 +24,6 @@ def call() {
 
             echo "Push ${IMG_TAG}"
             sh """
-                docker build --rm -t ${IMG_TAG} .
                 echo ${DOCKER_PAT} | docker login -u ${DOCKER_USERNAME} --password-stdin
                 docker push ${IMG_TAG} --quiet
                 docker logout
