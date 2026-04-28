@@ -53,12 +53,13 @@ EOF
                 --document-name "AWS-RunShellScript" \
                 --comment "Deploy docker-compose" \
                 --parameters commands='[    
-                      "sudo mkdir -p /opt/app",
-                      "sudo chown -R ec2-user:docker /opt/app || true",
-                      "echo $docker_compose | base64 -d > /opt/app/docker-compose.yaml",
-                      "aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
-                      "docker compose --project-directory /opt/app --remove-orphans down || true",
-                      "docker compose --project-directory /opt/app up -d"
+                    "sudo mkdir -p /opt/app",
+                    "sudo chown -R ec2-user:docker /opt/app || true",
+                    "echo $docker_compose | base64 -d > /opt/app/docker-compose.yaml",
+                    "aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+                    "docker compose --project-directory /opt/app down --remove-orphans || true",
+                    "docker container rm -f java-app 2>/dev/null || true",
+                    "docker compose --project-directory /opt/app up -d"
                   ]' \
                 --query 'Command.CommandId' \
                 --output text > /tmp/ssm_deploy_cmd_id.txt         
