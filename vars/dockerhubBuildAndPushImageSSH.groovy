@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 //
-// dockerhubBuildAndPushImageSSH.groovy
+// dockerhubBuildAndPushImage.groovy
 //
 def call() {
     echo "docker build and push image to Docker Hub..."
