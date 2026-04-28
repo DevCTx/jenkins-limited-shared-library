@@ -10,7 +10,8 @@ def call(String repository) {
 
     // // List all tags and ids of the given image, except for the specified tag, and remove all others from those listed ids.
     sh """
-        docker images "${repository}/${APP_IMAGE_NAME}" --format "{{.Tag}} {{.ID}}" | grep -v "${APP_IMAGE_TAG}" | awk '{print \$2}' | xargs -r docker rmi -f
+        docker images "${repository}/${APP_IMAGE_NAME}" --format "{{.Tag}} {{.ID}}" \
+        | grep -v '${APP_IMAGE_TAG}' | awk '{print \$2}' | xargs -r docker rmi -f
     """
 }
 

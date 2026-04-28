@@ -67,8 +67,8 @@ services:
 
             aws ssm wait command-executed \
                 --region eu-west-3 \
-                --instance-id ${EC2_PROD_ID} \
-                --command-id "\$CMD_ID"
+                --instance-id $EC2_PROD_ID \
+                --command-id $CMD_ID
         """
 
         // Notes : 
