@@ -30,8 +30,8 @@ services:
         restart: unless-stopped
         ports:
             - "${APP_HOST_PORT}:${APP_CONTAINER_PORT}"
-    EOF
-    """    
+EOF
+"""    
     }
 
     def docker_compose = sh(
