@@ -19,11 +19,8 @@ def call() {
                 --comment "Cleaning EC2 images via AWS SSM" \
                 --parameters commands='[
                     "docker image prune -f",
-                    "docker images ${ECR_REGISTRY}/${APP_IMAGE_NAME} --format \\"{{.Tag}} {{.ID}}\\" \
-                    | grep -v ${APP_IMAGE_TAG} | awk '{print \\$2}' | xargs -r docker rmi -f"
-                ]'
-
-                }'
+                    "docker images ${ECR_REGISTRY}/${APP_IMAGE_NAME} --format '{{.Tag}} {{.ID}}' | grep -v '${APP_IMAGE_TAG}' | awk '{print \$2}' | xargs -r docker rmi -f"
+                ]' \
                 --query 'Command.CommandId' \
                 --output text > /tmp/ssm_deploy_cmd_id.txt  
 
