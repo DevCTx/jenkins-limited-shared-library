@@ -26,7 +26,7 @@ def call() {
 
             # Build docker-compose and encode it in base64 (one line, no return)
             # to avoid Groovy interpolation
-            DOCKER_COMPOSE_B64=$(cat <<EOF | base64 -w 0
+            DOCKER_COMPOSE_B64=$(cat <<EOF | openssl base64 -A
 services:
     $APP_IMAGE_NAME:
         image: $ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG
@@ -39,7 +39,7 @@ EOF
 
             # Build the deployment script and encode it in base64 (one line, no return)
             # to avoid Groovy interpolation
-            DEPLOY_SCRIPT_B64=$(cat <<EOF  | base64 -w 0
+            DEPLOY_SCRIPT_B64=$(cat <<EOF  | openssl base64 -A
 set -euo pipefail
 echo "Prepare docker-commpose.yaml and run it on EC2 after log into ECR"
 

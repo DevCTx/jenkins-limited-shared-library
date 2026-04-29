@@ -18,7 +18,7 @@ def call() {
 
             # Build the cleaning script and encode it in base64 (one line, no return)
             # to avoid Groovy interpolation
-            CLEAN_SCRIPT_B64=$(cat <<EOF | base64 -w 0
+            CLEAN_SCRIPT_B64=$(cat <<EOF | openssl base64 -A
 
 # clean the images with no tag or <none>    
 docker image prune -f
