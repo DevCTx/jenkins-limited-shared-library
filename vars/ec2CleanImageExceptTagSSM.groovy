@@ -18,7 +18,7 @@ def call() {
             CLEAN_CMD=$(cat <<'EOF'
 docker image prune -f
 docker images "$ECR_REGISTRY/$APP_IMAGE_NAME" --format "{{.Tag}} {{.ID}}" 
-| grep -vw "$APP_IMAGE_TAG" | awk '{print $2}' | xargs -r docker rmi -f
+| grep -v "$APP_IMAGE_TAG" | awk '{print $2}' | xargs -r docker rmi -f
 EOF
 )
 
