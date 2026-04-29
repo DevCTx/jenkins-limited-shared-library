@@ -13,7 +13,7 @@ def call() {
             echo "... of $ECR_REGISTRY/$APP_IMAGE_NAME except tag $APP_IMAGE_TAG"
 
             # Verify IAM role
-            aws sts get-caller-identity --query "{Account:Account, User:Arn}"
+            aws sts get-caller-identity
 
             CLEAN_CMD=$(cat <<'EOF'
 docker image prune -f

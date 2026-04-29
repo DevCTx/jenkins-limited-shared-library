@@ -26,7 +26,7 @@ def call() {
             FULL_IMAGE="$ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
             echo "Build docker-commpose.yaml of $FULL_IMAGE"
 
-            cat > docker-compose.yaml <<'EOF'
+DOCKER_COMPOSE=$(cat <<EOF
 services:
     $APP_IMAGE_NAME:
         image: $ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG
@@ -35,27 +35,30 @@ services:
         ports:
             - "$APP_HOST_PORT:$APP_CONTAINER_PORT"
 EOF
+)
 
-            echo "Convert it into binary"            
-            DOCKER_COMPOSE=$(base64 -w 0 docker-compose.yaml)   
+DEPLOY_CMD=$(cat <<EOF
+sudo mkdir -p /opt/app
+sudo chown -R ec2-user:docker /opt/app || true
+
+echo "$DOCKER_COMPOSE" | base64 -d > /opt/app/docker-compose.yaml
+
+aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+docker compose --project-directory /opt/app down --remove-orphans || true
+docker compose --project-directory /opt/app up -d
+EOF
+)
 
             # Verify IAM role
-            aws sts get-caller-identity --query "{Account:Account, User:Arn}"
+            aws sts get-caller-identity
 
             CMD_ID=$(aws ssm send-command \
                 --region eu-west-3 \
                 --instance-ids $EC2_PROD_ID \
                 --document-name "AWS-RunShellScript" \
                 --comment "Deploy docker-compose" \
-                --parameters commands='[    
-                    "sudo mkdir -p /opt/app",
-                    "sudo chown -R ec2-user:docker /opt/app || true",
-                    "echo '$docker_compose' | base64 -d > /opt/app/docker-compose.yaml",
-                    "aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin $ECR_REGISTRY",
-                    "docker compose --project-directory /opt/app down --remove-orphans || true",
-                    "docker container rm -f java-app 2>/dev/null || true",
-                    "docker compose --project-directory /opt/app up -d"
-                  ]' \
+                --parameters "commands=['$DEPLOY_CMD']" \
                 --query 'Command.CommandId' \
                 --output text)
 
