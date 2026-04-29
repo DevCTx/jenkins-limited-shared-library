@@ -16,11 +16,14 @@ def call() {
             docker build --rm -t "$FULL_IMAGE" .
         
             # Verify IAM role
+            aws sts get-caller-identity --query "{Account:Account, User:Arn}"
+
+            set +x
             aws sts get-caller-identity
 
             # Create ECR repo if not exists
             aws ecr describe-repositories --repository-names $APP_IMAGE_NAME --region eu-west-3 \
-                || aws ecr create-repository --repository-name $APP_IMAGE_NAME --region eu-west-3
+            || aws ecr create-repository --repository-name $APP_IMAGE_NAME --region eu-west-3
 
             # Login ECR via IAM role
             aws ecr get-login-password --region eu-west-3 \

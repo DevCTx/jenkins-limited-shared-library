@@ -40,7 +40,7 @@ EOF
             DOCKER_COMPOSE=$(base64 -w 0 docker-compose.yaml)   
 
             # Verify IAM role
-            aws sts get-caller-identity
+            aws sts get-caller-identity --query "{Account:Account, User:Arn}"
 
             CMD_ID=$(aws ssm send-command \
                 --region eu-west-3 \
