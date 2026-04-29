@@ -13,8 +13,11 @@ def call() {
         sh "whoami && id && docker --version && docker ps"
 
         sh '''
+            set -euo pipefail
+
             FULL_IMAGE="$DOCKER_USERNAME/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
-            echo "... of $FULL_IMAGE"
+
+            echo "Building / Push Cleaning ${FULL_IMAGE} on Docker Hub"
 
             docker build --rm -t "$FULL_IMAGE" .
 

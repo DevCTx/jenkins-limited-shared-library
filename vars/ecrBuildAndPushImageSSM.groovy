@@ -3,29 +3,31 @@
 // ecrBuildAndPushImageSSM.groovy
 //
 def call() {
-    echo "Build and push image to ECR  ..."
+    echo "Build and push image to ECR ..."
 
     withCredentials( [
         string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY')
     ]) {
-
         sh '''
-            set -e
+            set -euo pipefail
 
             FULL_IMAGE="$ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
-            echo "... of $FULL_IMAGE"
+
+            echo "Building / Push Cleaning ${FULL_IMAGE} on ECR"
 
             docker build --rm -t "$FULL_IMAGE" .
         
-            # Verify IAM role
-            set -x
-            aws sts get-caller-identity
+            # Verify IAM role only (hiding secret infos)
+            aws sts get-caller-identity | jq -r '"Role: " + (.Arn | split("/")[1])'
 
-            # Create ECR repo if not exists
-            {
-                aws ecr describe-repositories --repository-names $APP_IMAGE_NAME --region eu-west-3 \
-                || aws ecr create-repository --repository-name $APP_IMAGE_NAME --region eu-west-3
-            } >/dev/null 2>&1
+            # Create ECR repo if not exists (hiding secret infos)
+            if aws ecr describe-repositories --repository-names $APP_IMAGE_NAME --region eu-west-3 >/dev/null 2>&1; then
+                echo "ECR repo $APP_IMAGE_NAME already exists"
+            else
+                echo "Creating ECR repo $APP_IMAGE_NAME ..."
+                aws ecr create-repository --repository-name $APP_IMAGE_NAME --region eu-west-3 >/dev/null
+                echo "ECR repo $APP_IMAGE_NAME created"
+            fi
 
             # Login ECR via IAM role
             aws ecr get-login-password --region eu-west-3 \
@@ -37,3 +39,4 @@ def call() {
         '''
     }
 }
+
