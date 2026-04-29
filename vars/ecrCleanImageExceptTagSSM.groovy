@@ -13,7 +13,7 @@ def call() {
             echo "Cleaning $ECR_REGISTRY/$APP_IMAGE_NAME except tag $APP_IMAGE_TAG on ECR"
 
             # Verify IAM role only (hiding secret infos)
-            aws sts get-caller-identity | jq -r '"Role: " + (.Arn | split("/")[1])'
+            aws sts get-caller-identity --output text --query 'Arn' | awk -F'/' '{print "Role: " $2}'
 
             # List all tags except the given tag
             IMAGES_TO_DELETE=$(aws ecr list-images \

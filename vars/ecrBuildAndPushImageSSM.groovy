@@ -18,7 +18,7 @@ def call() {
             docker build --rm -t "$FULL_IMAGE" .
         
             # Verify IAM role only (hiding secret infos)
-            aws sts get-caller-identity | jq -r '"Role: " + (.Arn | split("/")[1])'
+            aws sts get-caller-identity --output text --query 'Arn' | awk -F'/' '{print "Role: " $2}'
 
             # Create ECR repo if not exists (hiding secret infos)
             if aws ecr describe-repositories --repository-names $APP_IMAGE_NAME --region eu-west-3 >/dev/null 2>&1; then

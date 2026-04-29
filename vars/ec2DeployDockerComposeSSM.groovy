@@ -63,7 +63,7 @@ EOF
             )
 
             # Verify IAM role only (hiding secret infos)
-            aws sts get-caller-identity | jq -r '"Role: " + (.Arn | split("/")[1])'
+            aws sts get-caller-identity --output text --query 'Arn' | awk -F'/' '{print "Role: " $2}'
 
             SSM_CMD="echo $DEPLOY_SCRIPT_B64 | base64 -d | bash"
 
