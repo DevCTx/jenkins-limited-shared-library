@@ -14,11 +14,15 @@ def call() {
             echo "Cleaning ${DOCKER_USERNAME}/${APP_IMAGE_NAME} except ${APP_IMAGE_TAG} on Docker Hub"
 
             # Get a JSON Web Token(JWT) - PAT is not enough for DELETE but better than Password
-            JWT=$(printf '{"username":"%s","password":"%s"}' "${DOCKER_USERNAME}" "${DOCKER_PAT}" \
+            JWT=$(
+                set +x
+                printf '{"username":"%s","password":"%s"}' "${DOCKER_USERNAME}" "${DOCKER_PAT}" \
                 | curl -s -X POST "https://hub.docker.com/v2/users/login" \
                     -H "Content-Type: application/json" \
                     -d @- \
-                | grep -o '"token":"[^"]*' | cut -d'"' -f4 || true)
+                | grep -o '"token":"[^"]*' | cut -d'"' -f4 || true
+                set -x            
+            )
 
             if [ -z "$JWT" ]; then
                 echo "Error: Failed to get JWT token from Docker Hub"
