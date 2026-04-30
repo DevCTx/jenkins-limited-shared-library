@@ -13,7 +13,7 @@ def call() {
             set -euo pipefail
             echo "Cleaning ${DOCKER_USERNAME}/${APP_IMAGE_NAME} except ${APP_IMAGE_TAG} on Docker Hub"
 
-            set +x  // Undisplays the commands in the log (hide the JWT)
+            set +x  # Undisplays the commands in the log (hide the JWT)
 
             # Get a JSON Web Token(JWT) - PAT is not enough for DELETE but better than Password
             echo "Get JWT from Docker Hub"
