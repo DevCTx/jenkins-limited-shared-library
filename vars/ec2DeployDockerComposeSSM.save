@@ -2,11 +2,8 @@
 //
 // ec2DeployDockerComposeSSM.groovy
 //
-#!/usr/bin/env groovy
-//
-// ec2DeployDockerComposeSSM.groovy
-//
 def call() {
+
     echo "Deploying Docker Compose to EC2 via SSM..."
 
     ///////////////////////////////////////////////////////////////////////
@@ -19,18 +16,17 @@ def call() {
     //
     ///////////////////////////////////////////////////////////////////////
 
-    withCredentials([
+    withCredentials( [
         string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY'),
-        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID'),
-        string(credentialsId: 'S3_BUCKET', variable: 'S3_BUCKET')
+        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID')
     ]) {
         sh '''
             set -euo pipefail
-            
             echo "Build docker-commpose.yaml"
 
-            # Générer et uploader le docker-compose.yaml
-            cat > /tmp/docker-compose.yaml <<EOF
+            # Build docker-compose and encode it in base64 (one line, no return)
+            # to avoid Groovy interpolation
+            DOCKER_COMPOSE=$(cat <<EOF
 services:
     $APP_IMAGE_NAME:
         image: $ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG
@@ -39,28 +35,46 @@ services:
         ports:
             - "$APP_HOST_PORT:$APP_CONTAINER_PORT"
 EOF
+            )
+            DOCKER_COMPOSE_B64=$(echo "$DOCKER_COMPOSE" | base64 -w 0)
 
-            echo "Send docker-commpose.yaml to S3"
+            # Build the deployment script and encode it in base64 (one line, no return)
+            # to avoid Groovy interpolation
+            DEPLOY_SCRIPT=$(cat <<EOF
+set -euo pipefail
+echo "Prepare docker-commpose.yaml and run it on EC2 after log into ECR"
 
-            aws s3 cp /tmp/docker-compose.yaml s3://$S3_BUCKET/docker-compose.yaml
-            rm -f /tmp/docker-compose.yaml
+sudo mkdir -p /opt/app
+sudo chown -R ec2-user:docker /opt/app || true
 
-            # Vérifier le rôle IAM
-            aws sts get-caller-identity --output text --query Arn | awk -F/ '{print "Role: " $2}'
+echo "$DOCKER_COMPOSE_B64" | base64 -d > /opt/app/docker-compose.yaml
 
-            echo "Send Cmd asking to get docker-commpose.yaml from S3"
+aws ecr get-login-password --region eu-west-3 \
+    | docker login --username AWS --password-stdin $ECR_REGISTRY
 
-            # Déployer via SSM
+docker compose --project-directory /opt/app down --remove-orphans || true
+docker compose --project-directory /opt/app up -d
+
+# Notes : "cd /opt/app" alone is useless in SSM
+# Each command in the SSM table runs in an independent shell 
+# so the cd does not persist for the next command.
+# use --project-directory /opt/app instead
+
+EOF
+            )
+            DEPLOY_SCRIPT_B64=$(echo "$DEPLOY_SCRIPT" | base64 -w 0)
+
+            # Verify IAM role only (hiding secret infos)
+            aws sts get-caller-identity --output text --query 'Arn' | awk -F'/' '{print "Role: " $2}'
+
+            SSM_CMD="echo $DEPLOY_SCRIPT_B64 | base64 -d | bash"
+
             CMD_ID=$(aws ssm send-command \
                 --region eu-west-3 \
                 --instance-ids $EC2_PROD_ID \
                 --document-name "AWS-RunShellScript" \
-                --parameters "commands=[
-                    \"aws s3 cp s3://$S3_BUCKET/docker-compose.yaml /opt/app/docker-compose.yaml\",
-                    \"aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin $ECR_REGISTRY >/dev/null\",
-                    \"docker compose --project-directory /opt/app down --remove-orphans || true\",
-                    \"docker compose --project-directory /opt/app up -d\"
-                ]" \
+                --comment "Deploy docker-compose" \
+                --parameters "commands=[\"$SSM_CMD\"]" \
                 --query 'Command.CommandId' \
                 --output text)
 
@@ -76,5 +90,5 @@ EOF
                 --query '{Status: Status, Output: StandardOutputContent, Error: StandardErrorContent}' \
                 --output json
         '''
-    }
+   }
 }
