@@ -39,11 +39,10 @@ EOF
                 }')
 
             echo "Send the JSON Command and clean on local"
-            CMD_ID=$(echo "$PAYLOAD" \
-                | aws ssm send-command \
-                    --cli-input-json file:///dev/stdin \
-                    --query 'Command.CommandId' --output text)
-            
+            CMD_ID=$(aws ssm send-command \
+                --cli-input-json "$PAYLOAD" \
+                --query 'Command.CommandId' --output text)
+
             aws ssm wait command-executed \
                 --instance-id "$EC2_PROD_ID" \
                 --command-id "$CMD_ID"
