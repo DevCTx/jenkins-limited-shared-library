@@ -17,21 +17,7 @@ def call() {
             # Vérifier le rôle IAM
             aws sts get-caller-identity --output text --query Arn | awk -F/ '{print "Role: " $2}'
 
-            echo "Build the cleaning script"
-            cat > /tmp/clean-script.sh <<EOF
-set -euo pipefail
-
-docker image prune -f
-
-docker images "$ECR_REGISTRY/$APP_IMAGE_NAME" --format "{{.Tag}} {{.ID}}" \
-    | awk -v keep="$APP_IMAGE_TAG" '\$1 != keep {print \$2}' | xargs -r docker rmi -f
-
-EOF
-            echo "Upload to S3 and clean on local"
-            aws s3 cp /tmp/clean-script.sh s3://$S3_BUCKET/clean-script.sh
-            rm -f /tmp/clean-script.sh
-
-            echo "Prepare the JSON Command to send"
+            echo "Prepare the JSON Command"
             cat > /tmp/ssm-clean.json <<EOF
 {
     "InstanceIds": ["$EC2_PROD_ID"],
@@ -39,9 +25,10 @@ EOF
     "Comment": "Cleaning ECR images on EC2",
     "Parameters": {
         "commands": [
-            "aws s3 cp s3://$S3_BUCKET/clean-script.sh /tmp/clean-script.sh",
-            "bash /tmp/clean-script.sh",
-            "rm -f /tmp/clean-script.sh"
+            "docker image prune -f",
+            "docker images ${ECR_REGISTRY}/${APP_IMAGE_NAME} --format '{{.Tag}} {{.ID}}' > /tmp/list-images.txt",
+            "awk -v keep=${APP_IMAGE_TAG} '\$1 != keep {print \$2}' /tmp/list-images.txt | xargs -r docker rmi -f",
+            "rm -f /tmp/list-images.txt"
         ]
     }
 }
@@ -54,7 +41,7 @@ EOF
                 --query 'Command.CommandId' \
                 --output text)
             
-            rm -f /tmp/ssm-clean.json            
+            rm -f /tmp/ssm-clean.json
 
             aws ssm wait command-executed \
                 --region eu-west-3 \
