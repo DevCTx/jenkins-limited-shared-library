@@ -71,7 +71,7 @@ EOF
             echo "Send the JSON Command and clean on local"
             # Déployer via SSM
             CMD_ID=$(aws ssm send-command \
-                --cli-input-json "$PAYLOAD" \
+                --cli-input-json "$JSON_PAYLOAD" \
                 --query 'Command.CommandId' --output text)
 
             aws ssm wait command-executed \
