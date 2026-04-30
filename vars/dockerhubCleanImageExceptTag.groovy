@@ -17,14 +17,18 @@ def call() {
             JWT=$(curl -s -X POST "https://hub.docker.com/v2/users/login" \
                 -H "Content-Type: application/json" \
                 -d "{\"username\": \"${DOCKER_USERNAME}\", \"password\": \"${DOCKER_PAT}\"}" \
-                | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+                | grep -o '"token":"[^"]*' | cut -d'"' -f4 || true)
+
+            if [ -z "$JWT" ]; then
+                echo "Error: Failed to get JWT token from Docker Hub"
+                exit 1
+            fi
 
             # Lists the tag names of the current image, exclude the current tag, and delete all other tags of this image
             curl -s "https://hub.docker.com/v2/repositories/${DOCKER_USERNAME}/${APP_IMAGE_NAME}/tags?page_size=100" \
                 | grep -o '"name":"[^"]*' | cut -d'"' -f4 \
                 | grep -v "^${APP_IMAGE_TAG}" \
                 | while read tag; do
-                    echo "Deleting tag: $tag"
                     STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
                         "https://hub.docker.com/v2/repositories/${DOCKER_USERNAME}/${APP_IMAGE_NAME}/tags/$tag/" \
                         -H "Authorization: Bearer $JWT")
@@ -33,7 +37,8 @@ def call() {
                     else
                         echo "Warning: failed to delete $tag (HTTP $STATUS)"
                     fi
-                done
+                done || true
         '''
+
     }
 }
