@@ -13,6 +13,13 @@ def call() {
             set -euo pipefail
             echo "Cleaning ${DOCKER_USERNAME}/${APP_IMAGE_NAME} except ${APP_IMAGE_TAG} on Docker Hub"
 
+            # Get a JSON Web Token(JWT) - PAT is not enough for DELETE but better than Password
+            JWT=$(curl -s -X POST "https://hub.docker.com/v2/users/login" \
+                -H "Content-Type: application/json" \
+                -d "{\"username\": \"${DOCKER_USERNAME}\", \"password\": \"${DOCKER_PAT}\"}" \
+                | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+
+            # Lists the tag names of the current image, exclude the current tag, and delete all other tags of this image
             curl -s "https://hub.docker.com/v2/repositories/${DOCKER_USERNAME}/${APP_IMAGE_NAME}/tags?page_size=100" \
                 | grep -o '"name":"[^"]*' | cut -d'"' -f4 \
                 | grep -v "^${APP_IMAGE_TAG}" \
@@ -20,7 +27,7 @@ def call() {
                     echo "Deleting tag: $tag"
                     STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
                         "https://hub.docker.com/v2/repositories/${DOCKER_USERNAME}/${APP_IMAGE_NAME}/tags/$tag/" \
-                        -H "Authorization: Bearer $DOCKER_PAT")
+                        -H "Authorization: Bearer $JWT")
                     if echo "$STATUS" | grep -q "^2"; then
                         echo "Deleted tag: $tag (HTTP $STATUS)"
                     else
@@ -30,4 +37,3 @@ def call() {
         '''
     }
 }
-
