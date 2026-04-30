@@ -37,28 +37,42 @@ services:
 EOF
 
             echo "Send docker-commpose.yaml to S3"
-
             aws s3 cp /tmp/docker-compose.yaml s3://$S3_BUCKET/docker-compose.yaml
             rm -f /tmp/docker-compose.yaml
 
             # Vérifier le rôle IAM
             aws sts get-caller-identity --output text --query Arn | awk -F/ '{print "Role: " $2}'
 
-            echo "Send Cmd asking to get docker-commpose.yaml from S3"
+            echo "Prepare the JSON Command"
+
+            # Prepare the JSON Command asking to get docker-commpose.yaml from S3 and set it up
+            cat > /tmp/ssm-input.json <<EOF
+{
+    "InstanceIds": ["$EC2_PROD_ID"],
+    "DocumentName": "AWS-RunShellScript",
+    "Comment": "Deploy docker-compose",
+    "Parameters": {
+        "commands": [
+            "sudo mkdir -p /opt/app",
+            "aws s3 cp s3://$S3_BUCKET/docker-compose.yaml /opt/app/docker-compose.yaml",
+            "aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin $ECR_REGISTRY >/dev/null",
+            "docker compose --project-directory /opt/app down --remove-orphans || true",
+            "docker compose --project-directory /opt/app up -d"
+        ]
+    }
+}
+EOF
+
+            echo "Send Cmd via JSON file"
 
             # Déployer via SSM
             CMD_ID=$(aws ssm send-command \
                 --region eu-west-3 \
-                --instance-ids $EC2_PROD_ID \
-                --document-name "AWS-RunShellScript" \
-                --parameters "commands=[
-                    \"aws s3 cp s3://$S3_BUCKET/docker-compose.yaml /opt/app/docker-compose.yaml\",
-                    \"aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin $ECR_REGISTRY >/dev/null\",
-                    \"docker compose --project-directory /opt/app down --remove-orphans || true\",
-                    \"docker compose --project-directory /opt/app up -d\"
-                ]" \
+                --cli-input-json file:///tmp/ssm-input.json \
                 --query 'Command.CommandId' \
                 --output text)
+
+            rm -f /tmp/ssm-input.json
 
             aws ssm wait command-executed \
                 --region eu-west-3 \
