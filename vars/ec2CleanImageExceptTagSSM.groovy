@@ -7,38 +7,54 @@ def call() {
 
     withCredentials( [
         string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY'),
-        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID')
+        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID'),
+        string(credentialsId: 'S3_BUCKET', variable: 'S3_BUCKET')
     ]) {
         sh '''
             set -euo pipefail
             echo "Cleaning $ECR_REGISTRY/$APP_IMAGE_NAME except tag $APP_IMAGE_TAG on EC2"
 
-            # Verify IAM role only (hiding secret infos)
-            aws sts get-caller-identity --output text --query 'Arn' | awk -F'/' '{print "Role: " $2}'
+            # Vérifier le rôle IAM
+            aws sts get-caller-identity --output text --query Arn | awk -F/ '{print "Role: " $2}'
 
-            # Build the cleaning script and encode it in base64 (one line, no return)
-            # to avoid Groovy interpolation
-            CLEAN_SCRIPT_B64=$(cat <<EOF |  base64 -w 0
+            echo "Build the cleaning script"
+            cat > /tmp/clean-script.sh <<EOF
+set -euo pipefail
 
-# clean the images with no tag or <none>    
 docker image prune -f
 
-# List all tags and ids of the given image, except for the specified tag, and remove all others from these listed ids.        
 docker images "$ECR_REGISTRY/$APP_IMAGE_NAME" --format "{{.Tag}} {{.ID}}" \
     | awk -v keep="$APP_IMAGE_TAG" '\$1 != keep {print \$2}' | xargs -r docker rmi -f
 
 EOF
-)
-            SSM_CMD="echo $CLEAN_SCRIPT_B64 | base64 -d | bash"
+            echo "Upload to S3 and clean on local"
+            aws s3 cp /tmp/clean-script.sh s3://$S3_BUCKET/clean-script.sh
+            rm -f /tmp/clean-script.sh
 
+            echo "Prepare the JSON Command to send"
+            cat > /tmp/ssm-clean.json <<EOF
+{
+    "InstanceIds": ["$EC2_PROD_ID"],
+    "DocumentName": "AWS-RunShellScript",
+    "Comment": "Cleaning ECR images on EC2",
+    "Parameters": {
+        "commands": [
+            "aws s3 cp s3://$S3_BUCKET/clean-script.sh /tmp/clean-script.sh",
+            "bash /tmp/clean-script.sh",
+            "rm -f /tmp/clean-script.sh"
+        ]
+    }
+}
+EOF
+
+            echo "Send the JSON Command and clean on local"
             CMD_ID=$(aws ssm send-command \
                 --region eu-west-3 \
-                --instance-ids $EC2_PROD_ID \
-                --document-name "AWS-RunShellScript" \
-                --comment "Cleaning ECR images on EC2 via SSM" \
-                --parameters "commands=[\"$SSM_CMD\"]" \
+                --cli-input-json file:///tmp/ssm-clean.json \
                 --query 'Command.CommandId' \
                 --output text)
+            
+            rm -f /tmp/ssm-clean.json            
 
             aws ssm wait command-executed \
                 --region eu-west-3 \

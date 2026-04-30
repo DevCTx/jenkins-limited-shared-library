@@ -22,10 +22,12 @@ def call() {
     ]) {
         sh '''
             set -euo pipefail
-            
-            echo "Build docker-commpose.yaml"
+            echo "Deploying $ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG to EC2"
 
-            # Générer et uploader le docker-compose.yaml
+            # Vérifier le rôle IAM
+            aws sts get-caller-identity --output text --query Arn | awk -F/ '{print "Role: " $2}'
+
+            echo "Build the docker-compose.yaml"
             cat > /tmp/docker-compose.yaml <<EOF
 services:
     $APP_IMAGE_NAME:
@@ -36,16 +38,11 @@ services:
             - "$APP_HOST_PORT:$APP_CONTAINER_PORT"
 EOF
 
-            echo "Send docker-commpose.yaml to S3"
+            echo "Upload to S3 and clean on local"
             aws s3 cp /tmp/docker-compose.yaml s3://$S3_BUCKET/docker-compose.yaml
             rm -f /tmp/docker-compose.yaml
 
-            # Vérifier le rôle IAM
-            aws sts get-caller-identity --output text --query Arn | awk -F/ '{print "Role: " $2}'
-
-            echo "Prepare the JSON Command"
-
-            # Prepare the JSON Command asking to get docker-commpose.yaml from S3 and set it up
+            echo "# Prepare the JSON Command to send"
             cat > /tmp/ssm-input.json <<EOF
 {
     "InstanceIds": ["$EC2_PROD_ID"],
@@ -63,8 +60,7 @@ EOF
 }
 EOF
 
-            echo "Send Cmd via JSON file"
-
+            echo "Send the JSON Command and clean on local"
             # Déployer via SSM
             CMD_ID=$(aws ssm send-command \
                 --region eu-west-3 \
