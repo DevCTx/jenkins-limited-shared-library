@@ -26,7 +26,7 @@ def call() {
 
             # Build docker-compose and encode it in base64 (one line, no return)
             # to avoid Groovy interpolation
-            DOCKER_COMPOSE_B64=$(cat <<EOF | base64 -w 0
+            DOCKER_COMPOSE=$(cat <<EOF
 services:
     $APP_IMAGE_NAME:
         image: $ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG
@@ -36,10 +36,11 @@ services:
             - "$APP_HOST_PORT:$APP_CONTAINER_PORT"
 EOF
             )
+            DOCKER_COMPOSE_B64=$(echo "$DOCKER_COMPOSE" | base64 -w 0)
 
             # Build the deployment script and encode it in base64 (one line, no return)
             # to avoid Groovy interpolation
-            DEPLOY_SCRIPT_B64=$(cat <<EOF  | base64 -w 0
+            DEPLOY_SCRIPT=$(cat <<EOF
 set -euo pipefail
 echo "Prepare docker-commpose.yaml and run it on EC2 after log into ECR"
 
@@ -61,6 +62,7 @@ docker compose --project-directory /opt/app up -d
 
 EOF
             )
+            DEPLOY_SCRIPT_B64=$(echo "$DEPLOY_SCRIPT" | base64 -w 0)
 
             # Verify IAM role only (hiding secret infos)
             aws sts get-caller-identity --output text --query 'Arn' | awk -F'/' '{print "Role: " $2}'
