@@ -2,10 +2,6 @@
 //
 // ec2DeployDockerComposeSSM.groovy
 //
-#!/usr/bin/env groovy
-//
-// ec2DeployDockerComposeSSM.groovy
-//
 def call() {
     echo "Deploying Docker Compose to EC2 via SSM..."
 
