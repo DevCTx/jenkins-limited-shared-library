@@ -7,8 +7,7 @@ def call() {
 
     withCredentials( [
         string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY'),
-        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID'),
-        string(credentialsId: 'S3_BUCKET', variable: 'S3_BUCKET')
+        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID')
     ]) {
         sh '''
             set -euo pipefail
@@ -17,42 +16,42 @@ def call() {
             # Vérifier le rôle IAM
             aws sts get-caller-identity --output text --query Arn | awk -F/ '{print "Role: " $2}'
 
-            echo "Prepare the JSON Command"
-            cat > /tmp/ssm-clean.json <<EOF
-{
-    "InstanceIds": ["$EC2_PROD_ID"],
-    "DocumentName": "AWS-RunShellScript",
-    "Comment": "Cleaning ECR images on EC2",
-    "Parameters": {
-        "commands": [
-            "docker image prune -f",
-            "docker images ${ECR_REGISTRY}/${APP_IMAGE_NAME} --format '{{.Tag}} {{.ID}}' > /tmp/list-images.txt",
-            "awk -v keep=${APP_IMAGE_TAG} '\$1 != keep {print \$2}' /tmp/list-images.txt | xargs -r docker rmi -f",
-            "rm -f /tmp/list-images.txt"
-        ]
-    }
-}
+            echo "Build the script to execute on EC2"
+            REMOTE_SCRIPT=$(cat <<EOF
+
+docker image prune -f
+
+docker images $ECR_REGISTRY/$APP_IMAGE_NAME --format '{{.Tag}} {{.ID}}' \
+    | grep -Fv '$APP_IMAGE_TAG ' | cut -d' ' -f2 | xargs -r docker rmi -f
+
 EOF
+)
+
+            echo "# Prepare the JSON Command to send"
+            JSON_PAYLOAD=$(jq -n \
+                --arg id     "$EC2_PROD_ID" \
+                --arg script "$REMOTE_SCRIPT" \
+                '{
+                    InstanceIds:  [$id],
+                    DocumentName: "AWS-RunShellScript",
+                    Comment:      "Cleaning ECR images on EC2",
+                    Parameters:   { commands: [$script] }
+                }')
 
             echo "Send the JSON Command and clean on local"
-            CMD_ID=$(aws ssm send-command \
-                --region eu-west-3 \
-                --cli-input-json file:///tmp/ssm-clean.json \
-                --query 'Command.CommandId' \
-                --output text)
+            CMD_ID=$(echo "$PAYLOAD" \
+                | aws ssm send-command \
+                    --cli-input-json file:///dev/stdin \
+                    --query 'Command.CommandId' --output text)
             
-            rm -f /tmp/ssm-clean.json
-
             aws ssm wait command-executed \
-                --region eu-west-3 \
-                --instance-id $EC2_PROD_ID \
-                --command-id $CMD_ID
+                --instance-id "$EC2_PROD_ID" \
+                --command-id "$CMD_ID"
 
             aws ssm get-command-invocation \
-                --region eu-west-3 \
-                --instance-id $EC2_PROD_ID \
-                --command-id $CMD_ID \
-                --query '{Status: Status, Output: StandardOutputContent, Error: StandardErrorContent}' \
+                --instance-id "$EC2_PROD_ID" \
+                --command-id "$CMD_ID" \
+                --query '{Status:Status, Output:StandardOutputContent, Error:StandardErrorContent}' \
                 --output json
         '''
     }

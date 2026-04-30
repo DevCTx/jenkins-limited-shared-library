@@ -21,17 +21,16 @@ def call() {
             aws sts get-caller-identity --output text --query 'Arn' | awk -F'/' '{print "Role: " $2}'
 
             # Create ECR repo if not exists (hiding secret infos)
-            if aws ecr describe-repositories --repository-names $APP_IMAGE_NAME --region eu-west-3 >/dev/null 2>&1; then
+            if aws ecr describe-repositories --repository-names $APP_IMAGE_NAME >/dev/null 2>&1; then
                 echo "ECR repo $APP_IMAGE_NAME already exists"
             else
                 echo "Creating ECR repo $APP_IMAGE_NAME ..."
-                aws ecr create-repository --repository-name $APP_IMAGE_NAME --region eu-west-3 >/dev/null
+                aws ecr create-repository --repository-name $APP_IMAGE_NAME >/dev/null
                 echo "ECR repo $APP_IMAGE_NAME created"
             fi
 
             # Login ECR via IAM role
-            aws ecr get-login-password --region eu-west-3 \
-                | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_REGISTRY
 
             docker push "$FULL_IMAGE" --quiet
 
