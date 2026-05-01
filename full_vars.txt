@@ -1,0 +1,694 @@
+::::::::::::::
+vars/buildJar.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// buildJar.groovy
+//
+def call() {
+    echo "Building JAR file ..."
+    sh 'mvn --no-transfer-progress clean package -DskipTests'
+}
+::::::::::::::
+vars/dockerhubBuildAndPushImage.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// dockerhubBuildAndPushImage.groovy
+//
+def call() {
+    echo "Build and push image to Docker Hub..."
+
+    withCredentials( [
+        string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
+        string(credentialsId: 'dockerhub-pat', variable: 'DOCKER_PAT')
+    ]) {
+        // Diagnoses 90% of jenkins+docker errors
+        sh "whoami && id && docker --version && docker ps"
+
+        sh '''
+            set -euo pipefail
+
+            FULL_IMAGE="$DOCKER_USERNAME/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
+
+            echo "Building / Push Cleaning ${FULL_IMAGE} on Docker Hub"
+
+            docker build --rm -t "$FULL_IMAGE" .
+
+            echo "$DOCKER_PAT" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+            docker push "$FULL_IMAGE" --quiet
+
+            docker logout
+        '''
+    }
+}
+::::::::::::::
+vars/dockerhubCleanImageExceptTag.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// dockerhubCleanImageExceptTag.groovy
+//
+def call() {
+    echo "Cleaning $APP_IMAGE_NAME except $APP_IMAGE_TAG on Docker Hub ... "
+    
+    withCredentials( [
+        string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
+        string(credentialsId: 'dockerhub-pat', variable: 'DOCKER_PAT')
+    ]) {
+        sh '''
+            set -euo pipefail
+            echo "Cleaning ${DOCKER_USERNAME}/${APP_IMAGE_NAME} except ${APP_IMAGE_TAG} on Docker Hub"
+
+            set +x  # Undisplays the commands in the log (hide the JWT)
+
+            # Get a JSON Web Token(JWT) - PAT is not enough for DELETE but better than Password
+            echo "Get JWT from Docker Hub"
+            JWT=$(printf '{"username":"%s","password":"%s"}' "${DOCKER_USERNAME}" "${DOCKER_PAT}" \
+                    | curl -s -X POST "https://hub.docker.com/v2/users/login" \
+                        -H "Content-Type: application/json" -d @- \
+                    | grep -o '"token":"[^"]*' | cut -d'"' -f4 || true)
+
+            echo "Check JWT"
+            if [ -z "$JWT" ]; then
+                echo "Error: Failed to get JWT token from Docker Hub"
+                exit 1
+            fi
+
+            # Lists the tag names of the current image, exclude the current tag, and delete all other tags of this image
+            curl -s "https://hub.docker.com/v2/repositories/${DOCKER_USERNAME}/${APP_IMAGE_NAME}/tags?page_size=100" \
+                | grep -o '"name":"[^"]*' | cut -d'"' -f4 \
+                | grep -v "^${APP_IMAGE_TAG}" \
+                | while read tag; do
+                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+                        "https://hub.docker.com/v2/repositories/${DOCKER_USERNAME}/${APP_IMAGE_NAME}/tags/$tag/" \
+                        -H "Authorization: Bearer $JWT")
+                    if echo "$STATUS" | grep -q "^2"; then
+                        echo "Deleted tag: $tag (HTTP $STATUS)"
+                    else
+                        echo "Warning: failed to delete $tag (HTTP $STATUS)"
+                    fi
+                done || true
+        '''
+    }
+}
+
+::::::::::::::
+vars/ec2CleanImageExceptTagSSH.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// ec2CleanImageExceptTagSSH.groovy
+//
+def call() {
+    echo "Cleaning $APP_IMAGE_NAME except $APP_IMAGE_TAG on EC2 ... "
+
+    withCredentials( [
+        string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
+        string(credentialsId: 'MY_INSTANCE_EC2_IP', variable: 'MY_INSTANCE_EC2_IP')
+    ]) {
+        sshagent(['EC2_SSH_KEY']) {
+            sh '''
+                set -euo pipefail
+                echo "Cleaning ${DOCKER_USERNAME}/${APP_IMAGE_NAME} except ${APP_IMAGE_TAG} on EC2"
+
+                # On Jenkins, prepare a Bash with Env Vars :
+                ssh -o StrictHostKeyChecking=no ec2-user@$MY_INSTANCE_EC2_IP \
+                    "DOCKER_USERNAME=$DOCKER_USERNAME \
+                     APP_IMAGE_NAME=$APP_IMAGE_NAME \
+                     APP_IMAGE_TAG=$APP_IMAGE_TAG \
+                     bash -s" << 'SCRIPT'
+# On EC2 :
+set -euo pipefail
+echo "Cleaning $DOCKER_USERNAME/$APP_IMAGE_NAME except $APP_IMAGE_TAG"
+
+# Delete all <none> images
+docker image prune -f
+
+# List tag and ids of images, compare to image tag to keep then delete the others
+docker images "$DOCKER_USERNAME/$APP_IMAGE_NAME" --format "{{.Tag}} {{.ID}}" \
+    | awk -v keep="$APP_IMAGE_TAG" '$1 != keep {print $2}'  | xargs -r docker rmi -f
+
+SCRIPT
+            '''
+        }
+    }
+}
+::::::::::::::
+vars/ec2CleanImageExceptTagSSM.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// ec2CleanImageExceptTagSSM.groovy
+//
+def call() {
+    echo "Cleaning ECR images on EC2 via SSM..."
+
+    withCredentials( [
+        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY'),
+        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID')
+    ]) {
+        sh '''
+            set -euo pipefail
+            echo "Cleaning $ECR_REGISTRY/$APP_IMAGE_NAME except tag $APP_IMAGE_TAG on EC2"
+
+            # Vérifier le rôle IAM
+            aws sts get-caller-identity --output text --query Arn | awk -F/ '{print "Role: " $2}'
+
+            echo "Build the script to execute on EC2"
+            REMOTE_SCRIPT=$(cat <<EOF
+
+docker image prune -f
+
+docker images $ECR_REGISTRY/$APP_IMAGE_NAME --format '{{.Tag}} {{.ID}}' \
+    | grep -Fv '$APP_IMAGE_TAG ' | cut -d' ' -f2 | xargs -r docker rmi -f
+
+EOF
+)
+
+            echo "# Prepare the JSON Command to send"
+            JSON_PAYLOAD=$(jq -n \
+                --arg id     "$EC2_PROD_ID" \
+                --arg script "$REMOTE_SCRIPT" \
+                '{
+                    InstanceIds:  [$id],
+                    DocumentName: "AWS-RunShellScript",
+                    Comment:      "Cleaning ECR images on EC2",
+                    Parameters:   { commands: [$script] }
+                }')
+
+            echo "Send the JSON Command and clean on local"
+            CMD_ID=$(aws ssm send-command \
+                --cli-input-json "$JSON_PAYLOAD" \
+                --query 'Command.CommandId' --output text)
+
+            aws ssm wait command-executed \
+                --instance-id "$EC2_PROD_ID" \
+                --command-id "$CMD_ID"
+
+            aws ssm get-command-invocation \
+                --instance-id "$EC2_PROD_ID" \
+                --command-id "$CMD_ID" \
+                --query '{Status:Status, Output:StandardOutputContent, Error:StandardErrorContent}' \
+                --output json
+        '''
+    }
+}
+::::::::::::::
+vars/ec2DeployDockerCmdSSH.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// ec2DeployDockerCmdSSH.groovy
+//
+def call() {
+    echo "Deploying $APP_IMAGE_NAME:$APP_IMAGE_TAG on EC2 ... "
+
+    withCredentials( [
+        string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
+        string(credentialsId: 'MY_INSTANCE_EC2_IP', variable: 'MY_INSTANCE_EC2_IP')
+    ]) {
+        sshagent(['EC2_SSH_KEY']) {
+            sh '''
+                set -euo pipefail
+                echo "Deploy ${DOCKER_USERNAME}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG} on EC2"
+
+                # On Jenkins, prepare a Bash with Env Vars :
+                ssh -o StrictHostKeyChecking=no ec2-user@$MY_INSTANCE_EC2_IP \
+                    "DOCKER_USERNAME=$DOCKER_USERNAME \
+                     APP_IMAGE_NAME=$APP_IMAGE_NAME \
+                     APP_IMAGE_TAG=$APP_IMAGE_TAG \
+                     APP_CONTAINER_NAME=$APP_CONTAINER_NAME \
+                     APP_HOST_PORT=$APP_HOST_PORT \
+                     APP_CONTAINER_PORT=$APP_CONTAINER_PORT \
+                     bash -s" << 'SCRIPT'
+# On EC2 :
+set -euo pipefail
+echo "Deploying $DOCKER_USERNAME/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
+
+# Pull the Image from Docker Hub
+docker pull "$DOCKER_USERNAME/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
+
+# Replace the container with the last version of the App
+docker stop "$APP_CONTAINER_NAME" || true
+docker rm "$APP_CONTAINER_NAME" || true
+docker run -d \
+    --name "$APP_CONTAINER_NAME" \
+    -p "$APP_HOST_PORT:$APP_CONTAINER_PORT" \
+    "$DOCKER_USERNAME/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
+SCRIPT
+            '''
+        }
+    }
+}
+::::::::::::::
+vars/ec2DeployDockerComposeSSM.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// ec2DeployDockerComposeSSM.groovy
+//
+def call() {
+    echo "Deploying Docker Compose to EC2 via SSM..."
+
+    ///////////////////////////////////////////////////////////////////////
+    //
+    //  SSM is really valuable when Jenkins is running on AWS with an IAM 
+    //  role, and on not a server outside of AWS, because it will ask for 
+    //  credentials to connect and some ports to open!
+    //
+    //  Requires creating Jenkins server on AWS to use SSM properly !!!
+    //
+    ///////////////////////////////////////////////////////////////////////
+
+    withCredentials([
+        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY'),
+        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID')
+    ]) {
+        sh '''
+            set -euo pipefail
+
+            echo "Deploying $ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG to EC2"
+
+            # Vérifier le rôle IAM
+            aws sts get-caller-identity --output text --query Arn | awk -F/ '{print "Role: " $2}'
+
+            echo "Build the docker-compose.yaml"
+            DOCKER_COMPOSE=$(cat <<EOF
+services:
+
+  $APP_IMAGE_NAME:
+    image: $ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG
+    container_name: $APP_CONTAINER_NAME
+    restart: unless-stopped
+    ports:
+      - "$APP_HOST_PORT:$APP_CONTAINER_PORT"
+
+EOF
+)
+
+            echo "Build the script to execute on EC2"
+            REMOTE_SCRIPT=$(cat <<EOF
+mkdir -p /opt/app
+
+cat > /opt/app/docker-compose.yaml <<'YAML'
+$DOCKER_COMPOSE
+YAML
+
+aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_REGISTRY >/dev/null
+
+docker compose --project-directory /opt/app down --remove-orphans || true
+docker compose --project-directory /opt/app up -d
+
+EOF
+)
+
+            echo "# Prepare the JSON Command to send"
+            JSON_PAYLOAD=$(jq -n \
+                --arg id     "$EC2_PROD_ID" \
+                --arg script "$REMOTE_SCRIPT" \
+                '{
+                    InstanceIds:  [$id],
+                    DocumentName: "AWS-RunShellScript",
+                    Comment:      "Deploy docker-compose",
+                    Parameters:   { commands: [$script] }
+                }')
+
+            echo "Send the JSON Command and clean on local"
+            # Déployer via SSM
+            CMD_ID=$(aws ssm send-command \
+                --cli-input-json "$JSON_PAYLOAD" \
+                --query 'Command.CommandId' --output text)
+
+            aws ssm wait command-executed \
+                --instance-id "$EC2_PROD_ID" \
+                --command-id "$CMD_ID"
+
+            aws ssm get-command-invocation \
+                --instance-id "$EC2_PROD_ID" \
+                --command-id "$CMD_ID" \
+                --query '{Status:Status, Output:StandardOutputContent, Error:StandardErrorContent}' \
+                --output json
+        '''
+    }
+}
+::::::::::::::
+vars/ec2DeployDockerComposeSSM.save
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// ec2DeployDockerComposeSSM.groovy
+//
+def call() {
+
+    echo "Deploying Docker Compose to EC2 via SSM..."
+
+    ///////////////////////////////////////////////////////////////////////
+    //
+    //  SSM is really valuable when Jenkins is running on AWS with an IAM 
+    //  role, and on not a server outside of AWS, because it will ask for 
+    //  credentials to connect and some ports to open!
+    //
+    //  Requires creating Jenkins server on AWS to use SSM properly !!!
+    //
+    ///////////////////////////////////////////////////////////////////////
+
+    withCredentials( [
+        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY'),
+        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID')
+    ]) {
+        sh '''
+            set -euo pipefail
+            echo "Build docker-commpose.yaml"
+
+            # Build docker-compose and encode it in base64 (one line, no return)
+            # to avoid Groovy interpolation
+            DOCKER_COMPOSE=$(cat <<EOF
+services:
+    $APP_IMAGE_NAME:
+        image: $ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG
+        container_name: $APP_CONTAINER_NAME
+        restart: unless-stopped
+        ports:
+            - "$APP_HOST_PORT:$APP_CONTAINER_PORT"
+EOF
+            )
+            DOCKER_COMPOSE_B64=$(echo "$DOCKER_COMPOSE" | base64 -w 0)
+
+            # Build the deployment script and encode it in base64 (one line, no return)
+            # to avoid Groovy interpolation
+            DEPLOY_SCRIPT=$(cat <<EOF
+set -euo pipefail
+echo "Prepare docker-commpose.yaml and run it on EC2 after log into ECR"
+
+sudo mkdir -p /opt/app
+sudo chown -R ec2-user:docker /opt/app || true
+
+echo "$DOCKER_COMPOSE_B64" | base64 -d > /opt/app/docker-compose.yaml
+
+aws ecr get-login-password --region eu-west-3 \
+    | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+docker compose --project-directory /opt/app down --remove-orphans || true
+docker compose --project-directory /opt/app up -d
+
+# Notes : "cd /opt/app" alone is useless in SSM
+# Each command in the SSM table runs in an independent shell 
+# so the cd does not persist for the next command.
+# use --project-directory /opt/app instead
+
+EOF
+            )
+            DEPLOY_SCRIPT_B64=$(echo "$DEPLOY_SCRIPT" | base64 -w 0)
+
+            # Verify IAM role only (hiding secret infos)
+            aws sts get-caller-identity --output text --query 'Arn' | awk -F'/' '{print "Role: " $2}'
+
+            SSM_CMD="echo $DEPLOY_SCRIPT_B64 | base64 -d | bash"
+
+            CMD_ID=$(aws ssm send-command \
+                --region eu-west-3 \
+                --instance-ids $EC2_PROD_ID \
+                --document-name "AWS-RunShellScript" \
+                --comment "Deploy docker-compose" \
+                --parameters "commands=[\"$SSM_CMD\"]" \
+                --query 'Command.CommandId' \
+                --output text)
+
+            aws ssm wait command-executed \
+                --region eu-west-3 \
+                --instance-id $EC2_PROD_ID \
+                --command-id $CMD_ID
+
+            aws ssm get-command-invocation \
+                --region eu-west-3 \
+                --instance-id $EC2_PROD_ID \
+                --command-id $CMD_ID \
+                --query '{Status: Status, Output: StandardOutputContent, Error: StandardErrorContent}' \
+                --output json
+        '''
+   }
+}
+::::::::::::::
+vars/ec2DeployEnvDockerComposeSSM.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// ec2DeployEnvDockerComposeSSM.groovy
+//
+def call() {
+
+    echo "Deploying application via AWS SSM..."
+
+    ///////////////////////////////////////////////////////////////////////
+    //
+    //  SSM is really valuable when Jenkins is running on AWS with an IAM 
+    //  role, and on not a server outside of AWS, because it will ask for 
+    //  credentials to connect and some ports to open!
+    //
+    //  Requires creating Jenkins server on AWS to use SSM properly !!!
+    //
+    ///////////////////////////////////////////////////////////////////////
+
+    // Encode the local files in base64 to facilitate the transfert 
+    // but only with shell or it will be blocked with groovy policies
+    withCredentials( [
+        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY')
+    ]) {
+        sh """
+        cat > docker-compose.yaml <<'EOF'
+services:
+    ${APP_IMAGE_NAME}:
+        image: ${ECR_REGISTRY}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG}
+        container_name: ${APP_CONTAINER_NAME}
+        restart: unless-stopped
+        ports:
+            - "${APP_HOST_PORT}:${APP_CONTAINER_PORT}"
+EOF
+"""    
+    }
+
+    def docker_compose = sh(
+        script: "base64 -w 0 docker-compose.yaml",
+        returnStdout: true
+    ).trim()
+
+    withCredentials( [
+        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY'),
+        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID')
+    ]) {
+        // Verify IAM role
+        sh 'aws sts get-caller-identity'        
+
+        sh """
+            aws ssm send-command \
+                --region eu-west-3 \
+                --instance-ids $EC2_PROD_ID \
+                --document-name "AWS-RunShellScript" \
+                --comment "Deploy docker-compose" \
+                --parameters commands='[    
+                    "sudo mkdir -p /opt/app",
+                    "sudo chown -R ec2-user:docker /opt/app || true",
+                    "echo $docker_compose | base64 -d > /opt/app/docker-compose.yaml",
+                    "aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+                    "docker compose --project-directory /opt/app down --remove-orphans || true",
+                    "docker container rm -f java-app 2>/dev/null || true",
+                    "docker compose --project-directory /opt/app up -d"
+                  ]' \
+                --query 'Command.CommandId' \
+                --output text > /tmp/ssm_deploy_cmd_id.txt         
+
+            CMD_ID=\$(cat /tmp/ssm_deploy_cmd_id.txt)
+
+            aws ssm wait command-executed \
+                --region eu-west-3 \
+                --instance-id $EC2_PROD_ID \
+                --command-id \$CMD_ID
+        """
+
+        // Notes : 
+        // cd /opt/app alone is useless in SSM
+        // Each command in the SSM table runs in an independent shell 
+        // so the cd does not persist for the next command.
+        // use --project-directory /opt/app instead
+        //
+        // set +x   # disables the display of commands
+   }
+}
+::::::::::::::
+vars/ecrBuildAndPushImageSSM.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// ecrBuildAndPushImageSSM.groovy
+//
+def call() {
+    echo "Build and push image to ECR ..."
+
+    withCredentials( [
+        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY')
+    ]) {
+        sh '''
+            set -euo pipefail
+
+            FULL_IMAGE="$ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
+
+            echo "Building / Push Cleaning ${FULL_IMAGE} on ECR"
+
+            docker build --rm -t "$FULL_IMAGE" .
+        
+            # Verify IAM role only (hiding secret infos)
+            aws sts get-caller-identity --output text --query 'Arn' | awk -F'/' '{print "Role: " $2}'
+
+            # Create ECR repo if not exists (hiding secret infos)
+            if aws ecr describe-repositories --repository-names $APP_IMAGE_NAME >/dev/null 2>&1; then
+                echo "ECR repo $APP_IMAGE_NAME already exists"
+            else
+                echo "Creating ECR repo $APP_IMAGE_NAME ..."
+                aws ecr create-repository --repository-name $APP_IMAGE_NAME >/dev/null
+                echo "ECR repo $APP_IMAGE_NAME created"
+            fi
+
+            # Login ECR via IAM role
+            aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+            docker push "$FULL_IMAGE" --quiet
+
+            docker logout $ECR_REGISTRY
+        '''
+    }
+}
+
+::::::::::::::
+vars/ecrCleanImageExceptTagSSM.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// ecrCleanImageExceptTagSSM.groovy
+//
+def call() {
+    echo "Cleaning ECR images on ECR via SSM..."
+
+    withCredentials( [
+        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY')
+    ]) {
+        sh '''
+            set -euo pipefail
+            echo "Cleaning $ECR_REGISTRY/$APP_IMAGE_NAME except tag $APP_IMAGE_TAG on ECR"
+
+            # Verify IAM role only (hiding secret infos)
+            aws sts get-caller-identity --output text --query 'Arn' | awk -F'/' '{print "Role: " $2}'
+
+            # List all tags except the given tag
+            IMAGES_TO_DELETE=$(aws ecr list-images \
+                --repository-name "$APP_IMAGE_NAME" \
+                --query "imageIds[?imageTag!='$APP_IMAGE_TAG']" \
+                --output json)
+
+            # and delete them if the list is not empty
+            if [ "$IMAGES_TO_DELETE" != "[]" ]; then
+                aws ecr batch-delete-image \
+                    --repository-name "$APP_IMAGE_NAME" \
+                    --image-ids "$IMAGES_TO_DELETE"
+            fi
+        '''
+    }
+}
+::::::::::::::
+vars/localBuildJar.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// localBuildJar.groovy
+//
+def call() {
+    echo "Building JAR file ..."
+    sh "mvn --no-transfer-progress clean package -DskipTests"
+}
+::::::::::::::
+vars/localCleanDockerhubImageExceptTag.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// localCleanDockerhubImageExceptTag.groovy
+//
+def call() {
+    echo "Cleaning $APP_IMAGE_NAME except $APP_IMAGE_TAG on local ... "
+    
+    withCredentials( [
+        string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME')
+    ]) {
+        sh '''
+            set -euo pipefail
+            echo "Cleaning ${DOCKER_USERNAME}/${APP_IMAGE_NAME} except ${APP_IMAGE_TAG} on local"
+
+            # clean the images with no tag or <none>    
+            docker image prune -f
+
+            # List all tags and ids of the given image, except for the specified tag, and remove all others from these listed ids.        
+            docker images ${DOCKER_USERNAME}/${APP_IMAGE_NAME} --format "{{.Tag}} {{.ID}}" \
+                | awk -v keep="${APP_IMAGE_TAG}" '\$1 != keep {print \$2}' | xargs -r docker rmi -f
+        '''
+    }
+}
+
+::::::::::::::
+vars/localCleanEcrImageExceptTag.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// localCleanEcrImageExceptTag.groovy
+//
+def call() {
+    echo "Cleaning ECR images on local..."
+
+    withCredentials( [
+        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY')
+    ]) {
+        sh '''
+            set -euo pipefail
+            echo "Cleaning $ECR_REGISTRY/$APP_IMAGE_NAME except tag $APP_IMAGE_TAG on local"
+
+            # clean the images with no tag or <none>    
+            docker image prune -f
+
+            # List all tags and ids of the given image, except for the specified tag, and remove all others from these listed ids.        
+            docker images "$ECR_REGISTRY/$APP_IMAGE_NAME" --format "{{.Tag}} {{.ID}}" \
+                | awk -v keep="$APP_IMAGE_TAG" '\$1 != keep {print \$2}' | xargs -r docker rmi -f
+        '''
+    }
+}
+
+
+
+::::::::::::::
+vars/localCleanImageExceptTag.groovy
+::::::::::::::
+#!/usr/bin/env groovy
+//
+// localCleanImageExceptTag.groovy
+//
+def call(String repository) {
+    echo "Cleaning all ${repository}${APP_IMAGE_NAME} docker images except tag ${APP_IMAGE_TAG} on local..."
+
+    // clean the images with no tag or <none>
+    sh "docker image prune -f"
+
+    // // List all tags and ids of the given image, except for the specified tag, and remove all others from those listed ids.
+
+    def cmd = """
+        docker image prune -f
+
+        docker images "${repository}/${APP_IMAGE_NAME}" --format "{{.Tag}} {{.ID}}" \
+        | awk '\$1 != "${APP_IMAGE_TAG}" {print \$2}' \
+        | xargs -r docker rmi -f
+    """
+    
+    echo cmd
+
+    sh cmd
+}
+
+
+

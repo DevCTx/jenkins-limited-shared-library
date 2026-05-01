@@ -43,9 +43,9 @@ EOF
 
             echo "Build the script to execute on EC2"
             REMOTE_SCRIPT=$(cat <<EOF
-sudo mkdir -p /opt/app
+mkdir -p /opt/app
 
-sudo tee /opt/app/docker-compose.yaml > /dev/null <<'YAML'
+cat > /opt/app/docker-compose.yaml <<'YAML'
 $DOCKER_COMPOSE
 YAML
 
