@@ -13,13 +13,13 @@ def call() {
         sh "whoami && id && docker --version && docker ps"
 
         sh '''
-            set -euo pipefail
+            set -euo pipefail   # stops if error (e), asks defined vars (u), checks all parts of pipeline (o pipefail)
 
             FULL_IMAGE="$DOCKER_USERNAME/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
 
             echo "Building / Push Cleaning ${FULL_IMAGE} on Docker Hub"
 
-            docker build --rm -t "$FULL_IMAGE" .
+            docker build --rm -t "$FULL_IMAGE" .   # clean the temporary files and add a tag to the image
 
             echo "$DOCKER_PAT" | docker login -u "$DOCKER_USERNAME" --password-stdin
 

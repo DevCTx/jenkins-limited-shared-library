@@ -9,7 +9,8 @@ def call() {
         string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY')
     ]) {
         sh '''
-            set -euo pipefail
+            set -euo pipefail   # stops if error (e), asks defined vars (u), checks all parts of pipeline (o pipefail)
+
             echo "Cleaning $ECR_REGISTRY/$APP_IMAGE_NAME except tag $APP_IMAGE_TAG on ECR"
 
             # Verify IAM role only (hiding secret infos)

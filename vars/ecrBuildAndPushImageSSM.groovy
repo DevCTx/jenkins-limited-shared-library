@@ -9,7 +9,7 @@ def call() {
         string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY')
     ]) {
         sh '''
-            set -euo pipefail
+            set -euo pipefail   # stops if error (e), asks defined vars (u), checks all parts of pipeline (o pipefail)
 
             FULL_IMAGE="$ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
 
