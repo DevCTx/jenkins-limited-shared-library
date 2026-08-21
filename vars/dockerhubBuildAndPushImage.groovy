@@ -6,7 +6,7 @@ def call() {
     echo "Build and push image to Docker Hub..."
 
     withCredentials( [
-        string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
+        string(credentialsId: 'dockerhub-username', variable: 'DOCKER_USERNAME'),
         string(credentialsId: 'dockerhub-pat', variable: 'DOCKER_PAT')
     ]) {
         // Diagnoses 90% of jenkins+docker errors

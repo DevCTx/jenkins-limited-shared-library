@@ -6,8 +6,8 @@ def call() {
     echo "Cleaning ECR images on EC2 via SSM..."
 
     withCredentials( [
-        string(credentialsId: 'ECR_REGISTRY', variable: 'ECR_REGISTRY'),
-        string(credentialsId: 'EC2_PROD_ID', variable: 'EC2_PROD_ID')
+        string(credentialsId: 'ecr-registry', variable: 'ECR_REGISTRY'),
+        string(credentialsId: 'app-ec2-id', variable: 'EC2_PROD_ID')
     ]) {
         sh '''
             set -euo pipefail

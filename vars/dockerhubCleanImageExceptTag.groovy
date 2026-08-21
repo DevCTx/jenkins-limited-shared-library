@@ -6,7 +6,7 @@ def call() {
     echo "Cleaning $APP_IMAGE_NAME except $APP_IMAGE_TAG on Docker Hub ... "
     
     withCredentials( [
-        string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
+        string(credentialsId: 'dockerhub-username', variable: 'DOCKER_USERNAME'),
         string(credentialsId: 'dockerhub-pat', variable: 'DOCKER_PAT')
     ]) {
         sh '''
@@ -19,7 +19,7 @@ def call() {
             # Get a JSON Web Token(JWT) - PAT is not enough for DELETE but better than Password
             echo "Get JWT from Docker Hub"
             # - sets a JSON object with credentials
-            # - sends the login request without progression (-s)
+            # - sends the login request without progression (-s)
             # - asks to read a file (@) from standard input (-) into the data (d) specifying a JSON header (H)
             # - response:{"token":"eyJhbGciOiJ..."} so isolates the 4th field : empty|token|:|eyJhbGciOiJ...|empty
             JWT=$(printf '{"username":"%s","password":"%s"}' "${DOCKER_USERNAME}" "${DOCKER_PAT}" \
@@ -34,8 +34,8 @@ def call() {
             fi
 
             # Lists the tag names of the current image, exclude the current tag, and delete all other tags of this image
-            # - lists 100 first tags of the repo
-            # - isolate name and keep 4th field
+            # - lists 100 first tags of the repo
+            # - isolate name and keep 4th field
             # - keep all except tag (-v = reverse)
             # - for each remaining tag, send an authenticated DELETE request and capture only the HTTP status code
             # - if the status starts with 2 (2xx = success), log the deletion, otherwise log a warning
@@ -55,4 +55,3 @@ def call() {
         '''
     }
 }
-

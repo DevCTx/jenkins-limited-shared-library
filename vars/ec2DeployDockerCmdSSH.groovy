@@ -6,10 +6,10 @@ def call() {
     echo "Deploying $APP_IMAGE_NAME:$APP_IMAGE_TAG on EC2 ... "
 
     withCredentials( [
-        string(credentialsId: 'DOCKER_USERNAME', variable: 'DOCKER_USERNAME'),
-        string(credentialsId: 'MY_INSTANCE_EC2_IP', variable: 'MY_INSTANCE_EC2_IP')
+        string(credentialsId: 'dockerhub-username', variable: 'DOCKER_USERNAME'),
+        string(credentialsId: 'app-ec2-ip', variable: 'MY_INSTANCE_EC2_IP')
     ]) {
-        sshagent(['EC2_SSH_KEY']) {
+        sshagent(['app-ec2-key']) {
             sh '''
                 set -euo pipefail
                 echo "Deploy ${DOCKER_USERNAME}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG} on EC2"
