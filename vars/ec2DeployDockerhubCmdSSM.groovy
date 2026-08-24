@@ -64,14 +64,14 @@ EOF
 
         try {
             // AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are injected here (Jenkins runs locally)
-            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                 sh deployScript   // "aws ..." finds these 2 vars -> authenticates with them
             }
         } catch (org.jenkinsci.plugins.credentialsbinding.impl.CredentialNotFoundException e) {
             // Here, neither AWS_ACCESS_KEY_ID nor AWS_SECRET_ACCESS_KEY is set (Jenkins runs on AWS)
-            // no AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY set here, so the
-            // AWS CLI falls through its default credential chain to the
-            // EC2 instance's IAM role
+            // no AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY set here, it means
+            // Jenkins runs on AWS -> AWS CLI falls through its default
+            // credential chain to the EC2 instance's IAM role
             sh deployScript
         }
     }

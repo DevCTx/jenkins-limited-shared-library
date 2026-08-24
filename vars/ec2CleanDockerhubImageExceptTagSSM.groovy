@@ -55,7 +55,7 @@ EOF
         '''
 
         try {
-            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
                 sh cleanScript
             }
         } catch (org.jenkinsci.plugins.credentialsbinding.impl.CredentialNotFoundException e) {
