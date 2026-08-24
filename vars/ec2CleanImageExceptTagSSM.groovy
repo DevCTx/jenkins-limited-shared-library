@@ -9,7 +9,7 @@ def call() {
         string(credentialsId: 'ecr-registry', variable: 'ECR_REGISTRY'),
         string(credentialsId: 'app-ec2-id', variable: 'EC2_PROD_ID')
     ]) {
-        sh '''
+        def cleanScript = '''
             set -euo pipefail
             echo "Cleaning $ECR_REGISTRY/$APP_IMAGE_NAME except tag $APP_IMAGE_TAG on EC2"
 
@@ -21,16 +21,16 @@ def call() {
 
 docker image prune -f
 
-docker images $ECR_REGISTRY/$APP_IMAGE_NAME --format '{{.Tag}} {{.ID}}' \
+docker images $ECR_REGISTRY/$APP_IMAGE_NAME --format '{{.Tag}} {{.ID}}' \\
     | grep -Fv '$APP_IMAGE_TAG ' | cut -d' ' -f2 | xargs -r docker rmi -f
 
 EOF
 )
 
             echo "# Prepare the JSON Command to send"
-            JSON_PAYLOAD=$(jq -n \
-                --arg id     "$EC2_PROD_ID" \
-                --arg script "$REMOTE_SCRIPT" \
+            JSON_PAYLOAD=$(jq -n \\
+                --arg id     "$EC2_PROD_ID" \\
+                --arg script "$REMOTE_SCRIPT" \\
                 '{
                     InstanceIds:  [$id],
                     DocumentName: "AWS-RunShellScript",
@@ -39,19 +39,30 @@ EOF
                 }')
 
             echo "Send the JSON Command and clean on local"
-            CMD_ID=$(aws ssm send-command \
-                --cli-input-json "$JSON_PAYLOAD" \
+            CMD_ID=$(aws ssm send-command \\
+                --cli-input-json "$JSON_PAYLOAD" \\
                 --query 'Command.CommandId' --output text)
 
-            aws ssm wait command-executed \
-                --instance-id "$EC2_PROD_ID" \
+            aws ssm wait command-executed \\
+                --instance-id "$EC2_PROD_ID" \\
                 --command-id "$CMD_ID"
 
-            aws ssm get-command-invocation \
-                --instance-id "$EC2_PROD_ID" \
-                --command-id "$CMD_ID" \
-                --query '{Status:Status, Output:StandardOutputContent, Error:StandardErrorContent}' \
+            aws ssm get-command-invocation \\
+                --instance-id "$EC2_PROD_ID" \\
+                --command-id "$CMD_ID" \\
+                --query '{Status:Status, Output:StandardOutputContent, Error:StandardErrorContent}' \\
                 --output json
         '''
+
+        try {
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                sh cleanScript
+            }
+        } catch (org.jenkinsci.plugins.credentialsbinding.impl.CredentialNotFoundException e) {
+            // no AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY set here, it means
+            // Jenkins runs on AWS -> AWS CLI falls through its default
+            // credential chain to the EC2 instance's IAM role
+            sh cleanScript
+        }
     }
 }

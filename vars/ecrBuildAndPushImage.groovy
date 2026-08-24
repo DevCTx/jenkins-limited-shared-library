@@ -8,7 +8,7 @@ def call() {
     withCredentials( [
         string(credentialsId: 'ecr-registry', variable: 'ECR_REGISTRY')
     ]) {
-        sh '''
+        def buildAndPushScript = '''
             set -euo pipefail   # stops if error (e), asks defined vars (u), checks all parts of pipeline (o pipefail)
 
             FULL_IMAGE="$ECR_REGISTRY/$APP_IMAGE_NAME:$APP_IMAGE_TAG"
@@ -29,12 +29,23 @@ def call() {
                 echo "ECR repo $APP_IMAGE_NAME created"
             fi
 
-            # Login ECR via IAM role
+            # Login ECR (IAM role or aws-creds, whichever the AWS CLI resolves)
             aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_REGISTRY
 
             docker push "$FULL_IMAGE" --quiet
 
             docker logout $ECR_REGISTRY
         '''
+
+        try {
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                sh buildAndPushScript
+            }
+        } catch (org.jenkinsci.plugins.credentialsbinding.impl.CredentialNotFoundException e) {
+            // no AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY set here, it means
+            // Jenkins runs on AWS -> AWS CLI falls through its default
+            // credential chain to the EC2 instance's IAM role
+            sh buildAndPushScript
+        }
     }
 }

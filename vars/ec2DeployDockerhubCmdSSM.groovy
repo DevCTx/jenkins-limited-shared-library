@@ -5,21 +5,11 @@
 def call() {
     echo "Deploying $APP_IMAGE_NAME:$APP_IMAGE_TAG to EC2 via SSM..."
 
-    ///////////////////////////////////////////////////////////////////////
-    //
-    //  SSM is really valuable when Jenkins is running on AWS with an IAM 
-    //  role, and on not a server outside of AWS, because it will ask for 
-    //  credentials to connect and some ports to open!
-    //
-    //  Requires creating Jenkins server on AWS to use SSM properly !!!
-    //
-    ///////////////////////////////////////////////////////////////////////
-
     withCredentials([
         string(credentialsId: 'dockerhub-username', variable: 'DOCKER_USERNAME'),
         string(credentialsId: 'app-ec2-id', variable: 'EC2_PROD_ID')
     ]) {
-        sh '''
+        def deployScript = '''
             set -euo pipefail
 
             echo "Deploying $DOCKER_USERNAME/$APP_IMAGE_NAME:$APP_IMAGE_TAG to EC2"
@@ -37,18 +27,18 @@ docker pull $DOCKER_USERNAME/$APP_IMAGE_NAME:$APP_IMAGE_TAG
 docker stop $APP_CONTAINER_NAME || true
 docker rm $APP_CONTAINER_NAME || true
 
-docker run -d \
-    --name $APP_CONTAINER_NAME \
-    -p $APP_HOST_PORT:$APP_CONTAINER_PORT \
+docker run -d \\
+    --name $APP_CONTAINER_NAME \\
+    -p $APP_HOST_PORT:$APP_CONTAINER_PORT \\
     $DOCKER_USERNAME/$APP_IMAGE_NAME:$APP_IMAGE_TAG
 
 EOF
 )
 
             echo "# Prepare the JSON Command to send"
-            JSON_PAYLOAD=$(jq -n \
-                --arg id     "$EC2_PROD_ID" \
-                --arg script "$REMOTE_SCRIPT" \
+            JSON_PAYLOAD=$(jq -n \\
+                --arg id     "$EC2_PROD_ID" \\
+                --arg script "$REMOTE_SCRIPT" \\
                 '{
                     InstanceIds:  [$id],
                     DocumentName: "AWS-RunShellScript",
@@ -57,19 +47,32 @@ EOF
                 }')
 
             echo "Send the JSON Command and clean on local"
-            CMD_ID=$(aws ssm send-command \
-                --cli-input-json "$JSON_PAYLOAD" \
+            CMD_ID=$(aws ssm send-command \\
+                --cli-input-json "$JSON_PAYLOAD" \\
                 --query 'Command.CommandId' --output text)
 
-            aws ssm wait command-executed \
-                --instance-id "$EC2_PROD_ID" \
+            aws ssm wait command-executed \\
+                --instance-id "$EC2_PROD_ID" \\
                 --command-id "$CMD_ID"
 
-            aws ssm get-command-invocation \
-                --instance-id "$EC2_PROD_ID" \
-                --command-id "$CMD_ID" \
-                --query '{Status:Status, Output:StandardOutputContent, Error:StandardErrorContent}' \
+            aws ssm get-command-invocation \\
+                --instance-id "$EC2_PROD_ID" \\
+                --command-id "$CMD_ID" \\
+                --query '{Status:Status, Output:StandardOutputContent, Error:StandardErrorContent}' \\
                 --output json
         '''
+
+        try {
+            // AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are injected here (Jenkins runs locally)
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                sh deployScript   // "aws ..." finds these 2 vars -> authenticates with them
+            }
+        } catch (org.jenkinsci.plugins.credentialsbinding.impl.CredentialNotFoundException e) {
+            // Here, neither AWS_ACCESS_KEY_ID nor AWS_SECRET_ACCESS_KEY is set (Jenkins runs on AWS)
+            // no AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY set here, so the
+            // AWS CLI falls through its default credential chain to the
+            // EC2 instance's IAM role
+            sh deployScript
+        }
     }
 }
