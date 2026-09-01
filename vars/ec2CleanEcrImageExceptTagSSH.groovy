@@ -9,7 +9,7 @@ def call() {
         string(credentialsId: 'ecr-registry', variable: 'ECR_REGISTRY'),
         string(credentialsId: 'app-ec2-ip', variable: 'MY_INSTANCE_EC2_IP')
     ]) {
-        sshagent(['app-ec2-key']) {
+        sshagent(['app-ec2-ssh-key']) {
             sh '''
                 set -euo pipefail
                 echo "Cleaning ${ECR_REGISTRY}/${APP_IMAGE_NAME} except ${APP_IMAGE_TAG} on EC2"
