@@ -19,7 +19,7 @@ def call() {
             # List all tags except the given tag
             IMAGES_TO_DELETE=$(aws ecr list-images \\
                 --repository-name "$APP_IMAGE_NAME" \\
-                --query "imageIds[?imageTag!='$APP_IMAGE_TAG']" \\
+                --query "imageIds[?imageTag && imageTag!='$APP_IMAGE_TAG']" \\
                 --output json)
 
             # and delete them if the list is not empty
