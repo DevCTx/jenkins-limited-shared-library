@@ -20,8 +20,6 @@ def call() {
             echo "Build the script to execute on EC2"
             REMOTE_SCRIPT=$(cat <<EOF
 
-# DockerHub needs no login here, unlike ECR: a public/already-authorized
-# image can be pulled directly.
 docker pull $DOCKER_USERNAME/$APP_IMAGE_NAME:$APP_IMAGE_TAG
 
 docker stop $APP_CONTAINER_NAME || true
