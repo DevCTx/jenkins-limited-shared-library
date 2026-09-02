@@ -3,6 +3,7 @@
 // ec2DeployDockerCmdSSH.groovy
 //
 def call() {
+    echo "ec2DeployDockerCmdSSH.groovy"
     echo "Deploying $APP_IMAGE_NAME:$APP_IMAGE_TAG on EC2 ... "
 
     withCredentials( [
