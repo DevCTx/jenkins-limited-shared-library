@@ -11,7 +11,9 @@ def call() {
         string(credentialsId: 'app-ec2-ip', variable: 'MY_INSTANCE_EC2_IP')
     ]) {    
         sshagent(['app-ec2-ssh-key']) {
-            sh 'echo $MY_INSTANCE_EC2_IP | base64'
+            // Encode en Groovy direct (Jenkins ne voit pas passer le texte brut dans le shell)
+            def encodedIp = "$MY_INSTANCE_EC2_IP".bytes.encodeBase64().toString()
+            echo "IP en Base64 : ${encodedIp}"
             sh '''
                 set -euo pipefail
                 echo "Deploy ${DOCKER_USERNAME}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG} on EC2"
