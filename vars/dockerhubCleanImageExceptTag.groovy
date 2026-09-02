@@ -23,7 +23,7 @@ def call() {
             # - asks to read a file (@) from standard input (-) into the data (d) specifying a JSON header (H)
             # - response:{"token":"eyJhbGciOiJ..."} so isolates the 4th field : empty|token|:|eyJhbGciOiJ...|empty
             JWT=$(printf '{"username":"%s","password":"%s"}' "${DOCKER_USERNAME}" "${DOCKER_PAT}" \
-                    | curl -s -X POST "https://hub.docker.com/v2/users/login" \
+                    | curl -s --max-time 15 -X POST "https://hub.docker.com/v2/users/login" \
                         -H "Content-Type: application/json" -d @- \
                     | grep -o '"token":"[^"]*' | cut -d'"' -f4 || true)
 
