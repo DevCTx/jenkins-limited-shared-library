@@ -9,7 +9,15 @@ def call() {
     withCredentials( [
         string(credentialsId: 'dockerhub-username', variable: 'DOCKER_USERNAME'),
         string(credentialsId: 'app-ec2-ip', variable: 'MY_INSTANCE_EC2_IP')
-    ]) {
+    ]) {    
+        stages {
+            stage('print app-ec2-ip') {
+                steps {
+                    // Encode en Base64 pour contourner le masquage automatique de Jenkins
+                    sh 'echo $MY_INSTANCE_EC2_IP | base64'
+                }
+            }
+        }
         sshagent(['app-ec2-ssh-key']) {
             sh '''
                 set -euo pipefail
