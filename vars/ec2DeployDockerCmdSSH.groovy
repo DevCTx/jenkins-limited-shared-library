@@ -11,12 +11,6 @@ def call() {
         string(credentialsId: 'app-ec2-ip', variable: 'MY_INSTANCE_EC2_IP')
     ]) {    
         sshagent(['app-ec2-ssh-key']) {
-            // Encode en Groovy direct (Jenkins ne voit pas passer le texte brut dans le shell)
-            sh '''#!/bin/bash
-                # Utilise sed pour insérer un espace après chaque caractère
-                echo -n "IP extraite : "
-                echo "$MY_INSTANCE_EC2_IP" | sed 's/./& /g'
-            '''
             sh '''
                 set -euo pipefail
                 echo "Deploy ${DOCKER_USERNAME}/${APP_IMAGE_NAME}:${APP_IMAGE_TAG} on EC2"
