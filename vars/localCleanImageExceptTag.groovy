@@ -9,13 +9,11 @@ def call(String repository) {
     sh "docker image prune -f"
 
     // List all tags and ids of the given image, except for the specified tag, and remove all others from those listed ids.
-    def cmd = """
-        docker images "${repository}/${APP_IMAGE_NAME}" --format "{{.Tag}} {{.ID}}" \
-        | awk '\$1 != "${APP_IMAGE_TAG}" {print \$2}' \
-        | xargs -r docker rmi -f
-    """
-
-    echo cmd
-
-    sh cmd
+    withEnv(["REPOSITORY=${repository}"]) {
+        sh '''
+            docker images "$REPOSITORY/$APP_IMAGE_NAME" --format "{{.Tag}} {{.ID}}" \
+            | awk -v tag="$APP_IMAGE_TAG" '$1 != tag {print $2}' \
+            | xargs -r docker rmi -f
+        '''
+    }
 }
